@@ -8,154 +8,31 @@ import { ModalityBreakdown } from "@/components/dashboard/ModalityBreakdown";
 import { ExplainabilityPanel } from "@/components/dashboard/ExplainabilityPanel";
 import { CounterfactualComparison } from "@/components/dashboard/CounterfactualComparison";
 import { FairnessGauge } from "@/components/dashboard/FairnessGauge";
+import { ActiveJDCard } from "@/components/dashboard/ActiveJDCard";
+import { CandidateUploadModal } from "@/components/dashboard/CandidateUploadModal";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Upload, Filter, RefreshCw, ChevronLeft } from "lucide-react";
+import { Upload, Filter, RefreshCw, ChevronLeft, AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
-
-// Sample data
-const candidates: Array<{
-  id: string;
-  name: string;
-  position: string;
-  originalScore: number;
-  adjustedScore: number;
-  biasLevel: "low" | "medium" | "high";
-  modalities: ("resume" | "video" | "audio")[];
-  status: "processed" | "review" | "pending";
-}> = [
-  {
-    id: "1",
-    name: "Sarah Chen",
-    position: "Senior Software Engineer",
-    originalScore: 72,
-    adjustedScore: 84,
-    biasLevel: "medium",
-    modalities: ["resume", "video", "audio"],
-    status: "processed",
-  },
-  {
-    id: "2",
-    name: "Marcus Johnson",
-    position: "Product Manager",
-    originalScore: 88,
-    adjustedScore: 86,
-    biasLevel: "low",
-    modalities: ["resume", "video"],
-    status: "processed",
-  },
-  {
-    id: "3",
-    name: "Priya Sharma",
-    position: "Data Scientist",
-    originalScore: 65,
-    adjustedScore: 78,
-    biasLevel: "high",
-    modalities: ["resume", "audio"],
-    status: "review",
-  },
-  {
-    id: "4",
-    name: "James Wilson",
-    position: "UX Designer",
-    originalScore: 81,
-    adjustedScore: 82,
-    biasLevel: "low",
-    modalities: ["resume", "video", "audio"],
-    status: "processed",
-  },
-];
-
-const biasAttributionData = [
-  { factor: "Name Proxy", contribution: -12, category: "negative" as const },
-  { factor: "Accent Penalty", contribution: -18, category: "negative" as const },
-  { factor: "Gender Language", contribution: -8, category: "negative" as const },
-  { factor: "Institution Bias", contribution: -5, category: "negative" as const },
-  { factor: "Skills Match", contribution: 15, category: "positive" as const },
-  { factor: "Experience Relevance", contribution: 22, category: "positive" as const },
-];
-
-const modalityData = [
-  {
-    modality: "resume" as const,
-    confidenceScore: 94,
-    biasDetected: true,
-    factors: [
-      { name: "Gender-coded language", severity: "medium" as const },
-      { name: "Name proxy", severity: "high" as const },
-    ],
-  },
-  {
-    modality: "video" as const,
-    confidenceScore: 87,
-    biasDetected: true,
-    factors: [
-      { name: "Eye contact normalization", severity: "low" as const },
-      { name: "Background variance", severity: "low" as const },
-    ],
-  },
-  {
-    modality: "audio" as const,
-    confidenceScore: 91,
-    biasDetected: true,
-    factors: [
-      { name: "Accent penalty", severity: "high" as const },
-      { name: "Fluency adjustment", severity: "medium" as const },
-    ],
-  },
-];
-
-const explanations = [
-  {
-    type: "correction" as const,
-    title: "Accent Penalty Removed",
-    description: "Non-native English accent contributed −18% to original score. This was identified as a non-skill factor and corrected.",
-    impact: 18,
-  },
-  {
-    type: "detection" as const,
-    title: "Name-Based Bias Detected",
-    description: "Statistical analysis suggests the candidate's name may have triggered unconscious bias in ATS scoring algorithms.",
-    impact: -12,
-  },
-  {
-    type: "correction" as const,
-    title: "Eye Contact Normalization",
-    description: "Eye contact patterns were flagged but normalized due to neurodivergence-safe evaluation protocols.",
-    impact: 5,
-  },
-  {
-    type: "info" as const,
-    title: "Skills Alignment Confirmed",
-    description: "Technical skills and experience remain the primary contributors to the adjusted score.",
-    impact: 0,
-  },
-];
-
-const counterfactualScenarios = [
-  {
-    intervention: "Name changed to gender-neutral variant",
-    originalOutcome: 72,
-    counterfactualOutcome: 79,
-    biasDetected: true,
-  },
-  {
-    intervention: "Accent normalized to native speaker",
-    originalOutcome: 72,
-    counterfactualOutcome: 85,
-    biasDetected: true,
-  },
-  {
-    intervention: "Institution anonymized",
-    originalOutcome: 72,
-    counterfactualOutcome: 74,
-    biasDetected: false,
-  },
-];
+import { useFairHire } from "@/contexts/FairHireContext";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 const Dashboard = () => {
-  const [selectedCandidate, setSelectedCandidate] = useState<string | null>(null);
+  const { activeJD, candidates, getCandidateById, statusFilter, setStatusFilter, refreshStats } = useFairHire();
+  const [selectedCandidateId, setSelectedCandidateId] = useState<string | null>(null);
+  const [uploadModalOpen, setUploadModalOpen] = useState(false);
+
+  const filteredCandidates = candidates
+    .filter(c => activeJD ? c.jobDescriptionId === activeJD.id : true)
+    .filter(c => statusFilter === "all" || c.status === statusFilter);
+
+  const selectedCandidate = selectedCandidateId ? getCandidateById(selectedCandidateId) : null;
 
   const handleDownloadReport = () => {
     toast.success("Report generated", {
@@ -163,38 +40,58 @@ const Dashboard = () => {
     });
   };
 
-  const handleUpload = () => {
-    toast.info("Upload feature", {
-      description: "This would open a file upload dialog for candidate data.",
+  const handleRefresh = () => {
+    refreshStats();
+    toast.success("Dashboard refreshed", {
+      description: "Metrics have been recalculated.",
     });
   };
 
-  const selectedCandidateData = candidates.find(c => c.id === selectedCandidate);
+  // Transform candidate data for components
+  const biasAttributionData = selectedCandidate?.biasFactors.map(bf => ({
+    factor: bf.label,
+    contribution: bf.contribution,
+    category: bf.contribution < 0 ? "negative" as const : "positive" as const
+  })) || [];
+
+  const modalityData = selectedCandidate?.modalityScores.map(ms => ({
+    modality: ms.modality,
+    confidenceScore: ms.confidenceScore,
+    biasDetected: ms.biasFactors.length > 0,
+    factors: ms.biasFactors.map(bf => ({
+      name: bf.label,
+      severity: bf.severity
+    }))
+  })) || [];
 
   return (
     <Layout>
       <div className="container mx-auto px-4 py-8">
+        {/* Active JD Card */}
+        <div className="mb-6">
+          <ActiveJDCard />
+        </div>
+
         {/* Header */}
         <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 mb-8">
           <div>
             {selectedCandidate ? (
               <div className="flex items-center gap-3">
-                <Button 
-                  variant="ghost" 
-                  size="sm" 
-                  onClick={() => setSelectedCandidate(null)}
-                  className="gap-2"
-                >
+                <Button variant="ghost" size="sm" onClick={() => setSelectedCandidateId(null)} className="gap-2">
                   <ChevronLeft className="h-4 w-4" />
                   Back
                 </Button>
                 <div>
-                  <h1 className="font-display text-2xl font-bold">
-                    {selectedCandidateData?.name}
-                  </h1>
-                  <p className="text-muted-foreground">
-                    {selectedCandidateData?.position}
-                  </p>
+                  <div className="flex items-center gap-2">
+                    <h1 className="font-display text-2xl font-bold">{selectedCandidate.name}</h1>
+                    {selectedCandidate.status === "review" && (
+                      <Badge variant="caution" className="flex items-center gap-1">
+                        <AlertTriangle className="h-3 w-3" />
+                        Needs Review
+                      </Badge>
+                    )}
+                  </div>
+                  <p className="text-muted-foreground">{selectedCandidate.position}</p>
                 </div>
               </div>
             ) : (
@@ -208,73 +105,73 @@ const Dashboard = () => {
           </div>
           
           <div className="flex items-center gap-3">
-            <Button variant="outline" size="sm">
-              <Filter className="h-4 w-4 mr-2" />
-              Filters
-            </Button>
-            <Button variant="outline" size="sm">
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" size="sm">
+                  <Filter className="h-4 w-4 mr-2" />
+                  {statusFilter === "all" ? "All Status" : statusFilter}
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent>
+                <DropdownMenuItem onClick={() => setStatusFilter("all")}>All Status</DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setStatusFilter("processed")}>Processed</DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setStatusFilter("review")}>Needs Review</DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setStatusFilter("pending")}>Pending</DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+            <Button variant="outline" size="sm" onClick={handleRefresh}>
               <RefreshCw className="h-4 w-4 mr-2" />
               Refresh
             </Button>
-            <Button variant="hero" size="sm" onClick={handleUpload}>
-              <Upload className="h-4 w-4 mr-2" />
-              Upload Data
-            </Button>
+            <CandidateUploadModal
+              open={uploadModalOpen}
+              onOpenChange={setUploadModalOpen}
+              trigger={
+                <Button variant="hero" size="sm">
+                  <Upload className="h-4 w-4 mr-2" />
+                  Upload Data
+                </Button>
+              }
+            />
           </div>
         </div>
 
         {selectedCandidate ? (
           /* Candidate Detail View */
           <div className="space-y-6">
+            {/* Fairness Summary */}
+            <Card variant="elevated" className={selectedCandidate.status === "review" ? "border-caution/50" : ""}>
+              <CardContent className="p-4">
+                <p className="text-sm">{selectedCandidate.fairnessSummary}</p>
+              </CardContent>
+            </Card>
+
             {/* Score Cards */}
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-              <BiasScoreCard
-                title="Resume Score"
-                originalScore={68}
-                adjustedScore={79}
-                biasContribution={-16}
-                modality="resume"
-              />
-              <BiasScoreCard
-                title="Video Score"
-                originalScore={71}
-                adjustedScore={82}
-                biasContribution={-15}
-                modality="video"
-              />
-              <BiasScoreCard
-                title="Audio Score"
-                originalScore={65}
-                adjustedScore={81}
-                biasContribution={-24}
-                modality="audio"
-              />
+              {selectedCandidate.modalityScores.map(ms => (
+                <BiasScoreCard
+                  key={ms.modality}
+                  title={`${ms.modality.charAt(0).toUpperCase() + ms.modality.slice(1)} Score`}
+                  originalScore={ms.originalScore}
+                  adjustedScore={ms.adjustedScore}
+                  biasContribution={ms.biasFactors.reduce((s, bf) => s + bf.contribution, 0)}
+                  modality={ms.modality}
+                />
+              ))}
               <BiasScoreCard
                 title="Overall Score"
-                originalScore={selectedCandidateData?.originalScore || 0}
-                adjustedScore={selectedCandidateData?.adjustedScore || 0}
-                biasContribution={-16}
+                originalScore={selectedCandidate.originalScore}
+                adjustedScore={selectedCandidate.adjustedScore}
+                biasContribution={selectedCandidate.adjustedScore - selectedCandidate.originalScore}
                 modality="overall"
               />
             </div>
 
             {/* Fairness Gauges */}
             <div className="grid gap-4 md:grid-cols-3">
-              <FairnessGauge
-                score={87}
-                label="Overall Fairness"
-                description="Aggregate fairness across all modalities"
-              />
-              <FairnessGauge
-                score={92}
-                label="Causal Fairness"
-                description="Score stability under counterfactual interventions"
-              />
-              <FairnessGauge
-                score={78}
-                label="Cross-Modal Consistency"
-                description="Agreement between different input modalities"
-              />
+              <FairnessGauge score={Math.min(95, 70 + (selectedCandidate.adjustedScore - selectedCandidate.originalScore) * 2)} label="Overall Fairness" description="Aggregate fairness across all modalities" />
+              <FairnessGauge score={selectedCandidate.counterfactuals.filter(c => !c.biasDetected).length > 0 ? 92 : 78} label="Causal Fairness" description="Score stability under counterfactual interventions" />
+              <FairnessGauge score={selectedCandidate.modalityScores.length > 1 ? 85 : 95} label="Cross-Modal Consistency" description="Agreement between different input modalities" />
             </div>
 
             {/* Analysis Grid */}
@@ -284,90 +181,84 @@ const Dashboard = () => {
             </div>
 
             <div className="grid gap-6 lg:grid-cols-2">
-              <CounterfactualComparison scenarios={counterfactualScenarios} />
-              <ExplainabilityPanel
-                candidateName={selectedCandidateData?.name || ""}
-                explanations={explanations}
-                onDownloadReport={handleDownloadReport}
-              />
+              <CounterfactualComparison scenarios={selectedCandidate.counterfactuals} />
+              <ExplainabilityPanel candidateName={selectedCandidate.name} explanations={selectedCandidate.explanations} onDownloadReport={handleDownloadReport} />
             </div>
           </div>
         ) : (
           /* Overview View */
           <div className="space-y-8">
-            {/* Stats */}
             <StatsOverview />
 
-            {/* Candidates Grid */}
             <div>
               <div className="flex items-center justify-between mb-4">
-                <h2 className="font-display text-xl font-semibold">Recent Candidates</h2>
-                <Badge variant="secondary">{candidates.length} candidates</Badge>
+                <h2 className="font-display text-xl font-semibold">
+                  {activeJD ? `Candidates for ${activeJD.roleTitle}` : "All Candidates"}
+                </h2>
+                <Badge variant="secondary">{filteredCandidates.length} candidates</Badge>
               </div>
               
-              <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-                {candidates.map((candidate, index) => (
-                  <div
-                    key={candidate.id}
-                    className="animate-slide-up"
-                    style={{ animationDelay: `${index * 0.1}s` }}
-                  >
-                    <CandidateCard
-                      {...candidate}
-                      onViewDetails={() => setSelectedCandidate(candidate.id)}
-                    />
-                  </div>
-                ))}
-              </div>
+              {filteredCandidates.length === 0 ? (
+                <Card variant="elevated" className="border-dashed">
+                  <CardContent className="p-8 text-center">
+                    <p className="text-muted-foreground mb-4">
+                      {activeJD ? "No candidates uploaded yet. Add candidates to start bias analysis." : "Create a Job Description to begin."}
+                    </p>
+                    {activeJD && (
+                      <Button variant="hero" onClick={() => setUploadModalOpen(true)}>
+                        <Upload className="h-4 w-4 mr-2" />
+                        Upload Candidates
+                      </Button>
+                    )}
+                  </CardContent>
+                </Card>
+              ) : (
+                <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+                  {filteredCandidates.map((candidate, index) => (
+                    <div key={candidate.id} className="animate-slide-up" style={{ animationDelay: `${index * 0.05}s` }}>
+                      <CandidateCard {...candidate} onViewDetails={() => setSelectedCandidateId(candidate.id)} />
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
 
-            {/* Quick Insights */}
-            <div className="grid gap-6 lg:grid-cols-3">
-              <FairnessGauge
-                score={87}
-                label="Avg. Fairness Score"
-                description="Across all processed candidates"
-              />
-              <Card variant="elevated">
-                <CardHeader>
-                  <CardTitle className="text-base">Top Bias Factors</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-3">
-                  {[
-                    { name: "Accent Patterns", count: 124, severity: "high" },
-                    { name: "Name Proxies", count: 89, severity: "medium" },
-                    { name: "Institution Bias", count: 56, severity: "low" },
-                  ].map((factor) => (
-                    <div key={factor.name} className="flex items-center justify-between">
-                      <span className="text-sm">{factor.name}</span>
-                      <Badge 
-                        variant={factor.severity === "high" ? "bias" : factor.severity === "medium" ? "caution" : "muted"}
-                      >
-                        {factor.count}
-                      </Badge>
-                    </div>
-                  ))}
-                </CardContent>
-              </Card>
-              <Card variant="elevated">
-                <CardHeader>
-                  <CardTitle className="text-base">Processing Status</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-3">
-                  {[
-                    { label: "Processed", value: 1156, color: "bg-fair" },
-                    { label: "Needs Review", value: 89, color: "bg-caution" },
-                    { label: "Pending", value: 39, color: "bg-muted" },
-                  ].map((status) => (
-                    <div key={status.label} className="flex items-center gap-3">
-                      <div className={`w-2 h-2 rounded-full ${status.color}`} />
-                      <span className="text-sm flex-1">{status.label}</span>
-                      <span className="font-semibold">{status.value}</span>
-                    </div>
-                  ))}
-                </CardContent>
-              </Card>
-            </div>
+            {filteredCandidates.length > 0 && (
+              <div className="grid gap-6 lg:grid-cols-3">
+                <FairnessGauge score={87} label="Avg. Fairness Score" description="Across all processed candidates" />
+                <Card variant="elevated">
+                  <CardHeader><CardTitle className="text-base">Top Bias Factors</CardTitle></CardHeader>
+                  <CardContent className="space-y-3">
+                    {[
+                      { name: "Accent Patterns", count: filteredCandidates.filter(c => c.biasFactors.some(bf => bf.type === "accent_penalty")).length, severity: "high" },
+                      { name: "Name Proxies", count: filteredCandidates.filter(c => c.biasFactors.some(bf => bf.type === "name_proxy")).length, severity: "medium" },
+                      { name: "Gender Language", count: filteredCandidates.filter(c => c.biasFactors.some(bf => bf.type === "gender_language")).length, severity: "low" },
+                    ].map((factor) => (
+                      <div key={factor.name} className="flex items-center justify-between">
+                        <span className="text-sm">{factor.name}</span>
+                        <Badge variant={factor.severity === "high" ? "bias" : factor.severity === "medium" ? "caution" : "muted"}>{factor.count}</Badge>
+                      </div>
+                    ))}
+                  </CardContent>
+                </Card>
+                <Card variant="elevated">
+                  <CardHeader><CardTitle className="text-base">Processing Status</CardTitle></CardHeader>
+                  <CardContent className="space-y-3">
+                    {[
+                      { label: "Processed", value: filteredCandidates.filter(c => c.status === "processed").length, color: "bg-fair" },
+                      { label: "Needs Review", value: filteredCandidates.filter(c => c.status === "review").length, color: "bg-caution" },
+                      { label: "Pending", value: filteredCandidates.filter(c => c.status === "pending").length, color: "bg-muted" },
+                    ].map((status) => (
+                      <div key={status.label} className="flex items-center gap-3">
+                        <div className={`w-2 h-2 rounded-full ${status.color}`} />
+                        <span className="text-sm flex-1">{status.label}</span>
+                        <span className="font-semibold">{status.value}</span>
+                      </div>
+                    ))}
+                  </CardContent>
+                </Card>
+              </div>
+            )}
           </div>
         )}
       </div>
