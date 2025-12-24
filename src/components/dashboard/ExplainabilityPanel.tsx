@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { MessageSquare, Download, AlertTriangle, CheckCircle, Info, ArrowRight } from "lucide-react";
 
 interface Explanation {
-  type: "correction" | "detection" | "info";
+  type: "correction" | "detection" | "info" | "warning";
   title: string;
   description: string;
   impact: number;
@@ -26,6 +26,7 @@ export function ExplainabilityPanel({
       case "correction":
         return CheckCircle;
       case "detection":
+      case "warning":
         return AlertTriangle;
       default:
         return Info;
@@ -38,6 +39,8 @@ export function ExplainabilityPanel({
         return "text-fair bg-fair/10 border-fair/20";
       case "detection":
         return "text-caution bg-caution/10 border-caution/20";
+      case "warning":
+        return "text-bias bg-bias/10 border-bias/20";
       default:
         return "text-primary bg-primary/10 border-primary/20";
     }
