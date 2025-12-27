@@ -2,18 +2,18 @@ import { useState } from "react";
 import { Layout } from "@/components/layout/Layout";
 import { StatsOverview } from "@/components/dashboard/StatsOverview";
 import { CandidateCard } from "@/components/dashboard/CandidateCard";
-import { BiasScoreCard } from "@/components/dashboard/BiasScoreCard";
-import { BiasAttributionChart } from "@/components/dashboard/BiasAttributionChart";
-import { ModalityBreakdown } from "@/components/dashboard/ModalityBreakdown";
-import { ExplainabilityPanel } from "@/components/dashboard/ExplainabilityPanel";
-import { CounterfactualComparison } from "@/components/dashboard/CounterfactualComparison";
-import { FairnessGauge } from "@/components/dashboard/FairnessGauge";
 import { ActiveJDCard } from "@/components/dashboard/ActiveJDCard";
 import { ResumeUploadModal } from "@/components/dashboard/ResumeUploadModal";
+import { JDContextPanel } from "@/components/dashboard/JDContextPanel";
+import { ParsedResumePanel } from "@/components/dashboard/ParsedResumePanel";
+import { JDResumeAlignment } from "@/components/dashboard/JDResumeAlignment";
+import { BiasSignalsPanel } from "@/components/dashboard/BiasSignalsPanel";
+import { ScoreEvolutionPanel } from "@/components/dashboard/ScoreEvolutionPanel";
+import { ExplainabilityPanel } from "@/components/dashboard/ExplainabilityPanel";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Upload, Filter, RefreshCw, ChevronLeft, AlertTriangle } from "lucide-react";
+import { Upload, Filter, RefreshCw, ChevronLeft, AlertTriangle, ArrowDown } from "lucide-react";
 import { toast } from "sonner";
 import { useFairHire } from "@/contexts/FairHireContext";
 import {
@@ -47,27 +47,10 @@ const Dashboard = () => {
     });
   };
 
-  // Transform candidate data for components
-  const biasAttributionData = selectedCandidate?.biasFactors.map(bf => ({
-    factor: bf.label,
-    contribution: bf.contribution,
-    category: bf.contribution < 0 ? "negative" as const : "positive" as const
-  })) || [];
-
-  const modalityData = selectedCandidate?.modalityScores.map(ms => ({
-    modality: ms.modality,
-    confidenceScore: ms.confidenceScore,
-    biasDetected: ms.biasFactors.length > 0,
-    factors: ms.biasFactors.map(bf => ({
-      name: bf.label,
-      severity: bf.severity
-    }))
-  })) || [];
-
   return (
     <Layout>
       <div className="container mx-auto px-4 py-8">
-        {/* Active JD Card */}
+        {/* Active JD Card - Always visible at top */}
         <div className="mb-6">
           <ActiveJDCard />
         </div>
@@ -79,7 +62,7 @@ const Dashboard = () => {
               <div className="flex items-center gap-3">
                 <Button variant="ghost" size="sm" onClick={() => setSelectedCandidateId(null)} className="gap-2">
                   <ChevronLeft className="h-4 w-4" />
-                  Back
+                  Back to Candidates
                 </Button>
                 <div>
                   <div className="flex items-center gap-2">
@@ -98,7 +81,7 @@ const Dashboard = () => {
               <>
                 <h1 className="font-display text-3xl font-bold">Fairness Dashboard</h1>
                 <p className="text-muted-foreground mt-1">
-                  Monitor and analyze recruitment bias across candidates
+                  Transparent, explainable evaluation pipeline
                 </p>
               </>
             )}
@@ -136,57 +119,78 @@ const Dashboard = () => {
           </div>
         </div>
 
-        {selectedCandidate ? (
-          /* Candidate Detail View */
+        {selectedCandidate && activeJD ? (
+          /* CANDIDATE DETAIL VIEW - EXPLAINABLE PIPELINE */
           <div className="space-y-6">
-            {/* Fairness Summary */}
-            <Card variant="elevated" className={selectedCandidate.status === "review" ? "border-caution/50" : ""}>
+            {/* Pipeline Header */}
+            <div className="p-4 rounded-lg bg-muted/30 border border-border">
+              <h2 className="font-display text-lg font-semibold mb-2">
+                Evaluation Pipeline
+              </h2>
+              <p className="text-sm text-muted-foreground">
+                Follow the step-by-step analysis below to understand how {selectedCandidate.name}'s 
+                evaluation was computed. Each step builds upon the previous one.
+              </p>
+              <div className="flex items-center gap-2 mt-3 text-xs text-muted-foreground">
+                <Badge variant="secondary">JD Context</Badge>
+                <ArrowDown className="h-3 w-3" />
+                <Badge variant="secondary">Resume Parsing</Badge>
+                <ArrowDown className="h-3 w-3" />
+                <Badge variant="secondary">JD Matching</Badge>
+                <ArrowDown className="h-3 w-3" />
+                <Badge variant="secondary">Bias Detection</Badge>
+                <ArrowDown className="h-3 w-3" />
+                <Badge variant="secondary">Final Score</Badge>
+              </div>
+            </div>
+
+            {/* STEP 0: Job Description Context */}
+            <JDContextPanel jobDescription={activeJD} />
+
+            {/* STEP 1: Resume Parsing Output */}
+            <ParsedResumePanel candidate={selectedCandidate} />
+
+            {/* STEP 2: JD-Resume Alignment */}
+            <JDResumeAlignment candidate={selectedCandidate} />
+
+            {/* STEP 3: Bias Signals Detection */}
+            <BiasSignalsPanel 
+              biasFactors={selectedCandidate.biasFactors} 
+              candidateName={selectedCandidate.name}
+            />
+
+            {/* STEP 4: Score Evolution */}
+            <ScoreEvolutionPanel
+              originalScore={selectedCandidate.originalScore}
+              adjustedScore={selectedCandidate.adjustedScore}
+              jdMatchScore={selectedCandidate.jdMatchResult?.overallScore}
+              biasFactorsCount={selectedCandidate.biasFactors.length}
+            />
+
+            {/* Additional Explainability */}
+            <ExplainabilityPanel 
+              candidateName={selectedCandidate.name} 
+              explanations={selectedCandidate.explanations} 
+              onDownloadReport={handleDownloadReport} 
+            />
+
+            {/* Pipeline Summary */}
+            <Card variant="elevated" className="border-primary/20 bg-primary/5">
               <CardContent className="p-4">
-                <p className="text-sm">{selectedCandidate.fairnessSummary}</p>
+                <p className="text-sm">
+                  <strong>Summary:</strong> {selectedCandidate.fairnessSummary}
+                </p>
+                {selectedCandidate.status === "review" && (
+                  <p className="text-sm text-caution mt-2">
+                    ⚠️ This candidate has been flagged for human review due to detected bias patterns 
+                    that may require additional context.
+                  </p>
+                )}
               </CardContent>
             </Card>
-
-            {/* Score Cards */}
-            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-              {selectedCandidate.modalityScores.map(ms => (
-                <BiasScoreCard
-                  key={ms.modality}
-                  title={`${ms.modality.charAt(0).toUpperCase() + ms.modality.slice(1)} Score`}
-                  originalScore={ms.originalScore}
-                  adjustedScore={ms.adjustedScore}
-                  biasContribution={ms.biasFactors.reduce((s, bf) => s + bf.contribution, 0)}
-                  modality={ms.modality}
-                />
-              ))}
-              <BiasScoreCard
-                title="Overall Score"
-                originalScore={selectedCandidate.originalScore}
-                adjustedScore={selectedCandidate.adjustedScore}
-                biasContribution={selectedCandidate.adjustedScore - selectedCandidate.originalScore}
-                modality="overall"
-              />
-            </div>
-
-            {/* Fairness Gauges */}
-            <div className="grid gap-4 md:grid-cols-3">
-              <FairnessGauge score={Math.min(95, 70 + (selectedCandidate.adjustedScore - selectedCandidate.originalScore) * 2)} label="Overall Fairness" description="Aggregate fairness across all modalities" />
-              <FairnessGauge score={selectedCandidate.counterfactuals.filter(c => !c.biasDetected).length > 0 ? 92 : 78} label="Causal Fairness" description="Score stability under counterfactual interventions" />
-              <FairnessGauge score={selectedCandidate.modalityScores.length > 1 ? 85 : 95} label="Cross-Modal Consistency" description="Agreement between different input modalities" />
-            </div>
-
-            {/* Analysis Grid */}
-            <div className="grid gap-6 lg:grid-cols-2">
-              <BiasAttributionChart data={biasAttributionData} />
-              <ModalityBreakdown data={modalityData} />
-            </div>
-
-            <div className="grid gap-6 lg:grid-cols-2">
-              <CounterfactualComparison scenarios={selectedCandidate.counterfactuals} />
-              <ExplainabilityPanel candidateName={selectedCandidate.name} explanations={selectedCandidate.explanations} onDownloadReport={handleDownloadReport} />
-            </div>
           </div>
         ) : (
-          /* Overview View */
+          /* OVERVIEW VIEW */
           <div className="space-y-8">
             <StatsOverview />
 
@@ -202,12 +206,14 @@ const Dashboard = () => {
                 <Card variant="elevated" className="border-dashed">
                   <CardContent className="p-8 text-center">
                     <p className="text-muted-foreground mb-4">
-                      {activeJD ? "No candidates uploaded yet. Add candidates to start bias analysis." : "Create a Job Description to begin."}
+                      {activeJD 
+                        ? "No candidates uploaded yet. Upload a resume to start the explainable evaluation pipeline." 
+                        : "Create a Job Description to begin evaluating candidates."}
                     </p>
                     {activeJD && (
                       <Button variant="hero" onClick={() => setUploadModalOpen(true)}>
                         <Upload className="h-4 w-4 mr-2" />
-                        Upload Candidates
+                        Upload Resume
                       </Button>
                     )}
                   </CardContent>
@@ -225,7 +231,35 @@ const Dashboard = () => {
 
             {filteredCandidates.length > 0 && (
               <div className="grid gap-6 lg:grid-cols-3">
-                <FairnessGauge score={87} label="Avg. Fairness Score" description="Across all processed candidates" />
+                <Card variant="elevated">
+                  <CardHeader>
+                    <CardTitle className="text-base">Pipeline Overview</CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-3">
+                    <p className="text-sm text-muted-foreground">
+                      Each candidate goes through a 4-step evaluation:
+                    </p>
+                    <ol className="space-y-2 text-sm">
+                      <li className="flex items-center gap-2">
+                        <Badge variant="secondary" className="w-6 h-6 p-0 flex items-center justify-center">1</Badge>
+                        Resume Parsing
+                      </li>
+                      <li className="flex items-center gap-2">
+                        <Badge variant="secondary" className="w-6 h-6 p-0 flex items-center justify-center">2</Badge>
+                        JD Matching
+                      </li>
+                      <li className="flex items-center gap-2">
+                        <Badge variant="secondary" className="w-6 h-6 p-0 flex items-center justify-center">3</Badge>
+                        Bias Detection
+                      </li>
+                      <li className="flex items-center gap-2">
+                        <Badge variant="secondary" className="w-6 h-6 p-0 flex items-center justify-center">4</Badge>
+                        Score Adjustment
+                      </li>
+                    </ol>
+                  </CardContent>
+                </Card>
+
                 <Card variant="elevated">
                   <CardHeader><CardTitle className="text-base">Top Bias Factors</CardTitle></CardHeader>
                   <CardContent className="space-y-3">
@@ -241,6 +275,7 @@ const Dashboard = () => {
                     ))}
                   </CardContent>
                 </Card>
+
                 <Card variant="elevated">
                   <CardHeader><CardTitle className="text-base">Processing Status</CardTitle></CardHeader>
                   <CardContent className="space-y-3">
