@@ -135,8 +135,14 @@ export function FairHireProvider({ children }: { children: React.ReactNode }) {
   const addCandidate = useCallback((name: string, modalities: ("resume" | "video" | "audio")[]): Candidate | null => {
     if (!activeJD) return null;
     
-    const candidateInput = { name, position: activeJD.roleTitle, modalities };
     const currentCandidates = candidates.filter(c => c.jobDescriptionId === activeJD.id);
+    
+    // Max 6 candidates per JD for demo stability
+    if (currentCandidates.length >= 6) {
+      return null;
+    }
+    
+    const candidateInput = { name, position: activeJD.roleTitle, modalities };
     const newCandidate = processCandidate(candidateInput, activeJD, currentCandidates.length);
     
     setCandidates(prev => [...prev, newCandidate]);
@@ -147,7 +153,13 @@ export function FairHireProvider({ children }: { children: React.ReactNode }) {
     if (!activeJD) return;
     
     const currentCandidates = candidates.filter(c => c.jobDescriptionId === activeJD.id);
-    const newCandidates = SAMPLE_CANDIDATES.map((sample, index) => 
+    const remainingSlots = 6 - currentCandidates.length;
+    
+    if (remainingSlots <= 0) return;
+    
+    // Only add up to remaining slots
+    const samplesToAdd = SAMPLE_CANDIDATES.slice(0, remainingSlots);
+    const newCandidates = samplesToAdd.map((sample, index) => 
       processCandidate(sample, activeJD, currentCandidates.length + index)
     );
     
