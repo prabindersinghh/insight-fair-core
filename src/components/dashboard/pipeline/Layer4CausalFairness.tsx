@@ -25,31 +25,45 @@ export function Layer4CausalFairness({ candidate, isActive, isComplete, onComple
     weight: bf.contribution
   }));
 
+  // Keep expanded when active
+  useEffect(() => {
+    if (isActive) setIsExpanded(true);
+  }, [isActive]);
+
   useEffect(() => {
     if (isActive && !isComplete) {
       setStage("counterfactual");
       setProgress(0);
 
+      // Slower, more visible animation
+      const interval = setInterval(() => {
+        setProgress(prev => {
+          if (prev < 35) return prev + 2;
+          if (prev < 70) return prev + 2;
+          if (prev < 100) return prev + 3;
+          return prev;
+        });
+      }, 80);
+
       const timer1 = setTimeout(() => {
-        setProgress(35);
         setStage("weights");
-      }, 400);
+      }, 1000);
 
       const timer2 = setTimeout(() => {
-        setProgress(70);
         setStage("adjusting");
-      }, 700);
+      }, 1800);
 
       const timer3 = setTimeout(() => {
         setProgress(100);
         setStage("complete");
-      }, 1000);
+      }, 2400);
 
       const timer4 = setTimeout(() => {
         onComplete();
-      }, 1200);
+      }, 3000);
 
       return () => {
+        clearInterval(interval);
         clearTimeout(timer1);
         clearTimeout(timer2);
         clearTimeout(timer3);
@@ -88,7 +102,7 @@ export function Layer4CausalFairness({ candidate, isActive, isComplete, onComple
   };
 
   return (
-    <Card variant="elevated" className={`transition-all duration-300 ${isComplete ? "border-primary/40" : isActive ? "border-primary/40 ring-2 ring-primary/20" : "border-border opacity-60"}`}>
+    <Card variant="elevated" className={`transition-all duration-500 ${isComplete ? "border-primary/40" : isActive ? "border-primary/40 ring-2 ring-primary/20 shadow-lg shadow-primary/10" : "border-border opacity-50"}`}>
       <Collapsible open={isExpanded} onOpenChange={setIsExpanded}>
         <CardHeader className="pb-3">
           <CollapsibleTrigger className="w-full">

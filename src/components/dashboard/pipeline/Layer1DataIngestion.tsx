@@ -20,26 +20,40 @@ export function Layer1DataIngestion({ candidate, isActive, isComplete, onComplet
   const [isExpanded, setIsExpanded] = useState(true);
   const parsedResume = candidate.parsedResume;
 
+  // Keep expanded when active
+  useEffect(() => {
+    if (isActive) setIsExpanded(true);
+  }, [isActive]);
+
   useEffect(() => {
     if (isActive && !isComplete) {
       setParsingStage("extracting");
       setProgress(0);
 
+      // Slower, more visible animation
+      const interval = setInterval(() => {
+        setProgress(prev => {
+          if (prev < 40) return prev + 2;
+          if (prev < 100) return prev + 3;
+          return prev;
+        });
+      }, 80);
+
       const timer1 = setTimeout(() => {
-        setProgress(40);
         setParsingStage("parsing");
-      }, 500);
+      }, 1200);
 
       const timer2 = setTimeout(() => {
-        setProgress(100);
         setParsingStage("complete");
-      }, 1000);
+        setProgress(100);
+      }, 2400);
 
       const timer3 = setTimeout(() => {
         onComplete();
-      }, 1200);
+      }, 3000);
 
       return () => {
+        clearInterval(interval);
         clearTimeout(timer1);
         clearTimeout(timer2);
         clearTimeout(timer3);
@@ -63,8 +77,11 @@ export function Layer1DataIngestion({ candidate, isActive, isComplete, onComplet
     return <Badge variant="muted" className="text-xs">Pending</Badge>;
   };
 
+  // Pulse animation class for active state
+  const pulseClass = isActive && !isComplete ? "animate-pulse" : "";
+
   return (
-    <Card variant="elevated" className={`transition-all duration-300 ${isComplete ? "border-fair/40" : isActive ? "border-primary/40 ring-2 ring-primary/20" : "border-border opacity-60"}`}>
+    <Card variant="elevated" className={`transition-all duration-500 ${isComplete ? "border-fair/40" : isActive ? "border-primary/40 ring-2 ring-primary/20 shadow-lg shadow-primary/10" : "border-border opacity-50"}`}>
       <Collapsible open={isExpanded} onOpenChange={setIsExpanded}>
         <CardHeader className="pb-3">
           <CollapsibleTrigger className="w-full">
