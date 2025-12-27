@@ -2,6 +2,7 @@
 // Rule-based, reproducible bias detection for hackathon demo
 
 import type { JobDescription, Candidate, BiasFactor, BiasType, ModalityScore, CandidateExplanation, CounterfactualScenario } from "@/types/fairhire";
+import type { ParsedResume, JDMatchResult } from "./resumeParser";
 
 // Deterministic hash for consistent results
 function simpleHash(str: string): number {
@@ -24,10 +25,13 @@ const NAME_BIAS_PATTERNS = {
 // Accent/language patterns
 const LANGUAGE_MISMATCH_INDICATORS = ["Hindi", "Mandarin", "Spanish", "Arabic", "Portuguese", "Russian"];
 
-interface CandidateInput {
+export interface CandidateInput {
   name: string;
   position: string;
   modalities: ("resume" | "video" | "audio")[];
+  parsedResume?: ParsedResume;
+  jdMatchResult?: JDMatchResult;
+  resumeFileName?: string;
 }
 
 // Generate deterministic base score
@@ -127,19 +131,28 @@ function detectBackgroundBias(name: string, jd: JobDescription, hasVideo: boolea
 }
 
 // Detect gender-coded language in resume
-function detectGenderLanguageBias(name: string, jd: JobDescription, hasResume: boolean): BiasFactor | null {
+function detectGenderLanguageBias(name: string, jd: JobDescription, hasResume: boolean, parsedResume?: ParsedResume): BiasFactor | null {
   if (!hasResume) return null;
   
   const hash = simpleHash(name + "gender");
   const hasGenderBias = hash % 4 === 1;
   
-  if (hasGenderBias) {
+  // Check for actual gender-coded language in parsed resume
+  const genderWords = ['assertive', 'aggressive', 'collaborative', 'nurturing', 'competitive', 'supportive'];
+  let foundPattern = false;
+  if (parsedResume) {
+    foundPattern = genderWords.some(word => parsedResume.rawText.toLowerCase().includes(word));
+  }
+  
+  if (hasGenderBias || foundPattern) {
     return {
       type: "gender_language",
       label: "Gender-Coded Language",
-      severity: "medium",
-      contribution: -8,
-      explanation: `Resume contains language patterns historically associated with gender bias in ATS systems.`,
+      severity: foundPattern ? "medium" : "low",
+      contribution: foundPattern ? -8 : -5,
+      explanation: parsedResume 
+        ? `Resume phrasing contains language patterns historically associated with gender bias in ATS systems.`
+        : `Resume contains language patterns historically associated with gender bias in ATS systems.`,
       jdContext: `${jd.roleTitle} evaluation should focus on skills, not gendered language patterns.`
     };
   }
@@ -147,11 +160,30 @@ function detectGenderLanguageBias(name: string, jd: JobDescription, hasResume: b
 }
 
 // Detect institution bias
-function detectInstitutionBias(name: string, jd: JobDescription, hasResume: boolean): BiasFactor | null {
+function detectInstitutionBias(name: string, jd: JobDescription, hasResume: boolean, parsedResume?: ParsedResume): BiasFactor | null {
   if (!hasResume) return null;
   
   const hash = simpleHash(name + "institution");
   const hasInstitutionBias = hash % 6 === 0;
+  
+  // Check for non-elite institution patterns
+  let institutionContext = "";
+  if (parsedResume && parsedResume.education.length > 0) {
+    const edu = parsedResume.education[0];
+    institutionContext = edu.institution;
+    // Simulate bias for non-"brand name" institutions
+    const isNonElite = !/(stanford|mit|harvard|yale|princeton|berkeley|cambridge|oxford)/i.test(edu.institution);
+    if (isNonElite && hasInstitutionBias) {
+      return {
+        type: "institution_bias",
+        label: "Institution Proxy Bias",
+        severity: "medium",
+        contribution: -7,
+        explanation: `Educational institution "${edu.institution}" may have influenced scoring beyond skill relevance. Credential verified: ${edu.degree}.`,
+        jdContext: `${jd.roleTitle} requirements focus on skills and experience, not institutional prestige.`
+      };
+    }
+  }
   
   if (hasInstitutionBias) {
     return {
@@ -161,6 +193,29 @@ function detectInstitutionBias(name: string, jd: JobDescription, hasResume: bool
       contribution: -5,
       explanation: `Educational institution name may have influenced scoring beyond skill relevance.`,
       jdContext: `${jd.roleTitle} requirements focus on skills and experience, not institutional prestige.`
+    };
+  }
+  return null;
+}
+
+// Detect resume language structure bias (NEW)
+function detectResumeLanguageBias(parsedResume: ParsedResume | undefined, jd: JobDescription): BiasFactor | null {
+  if (!parsedResume) return null;
+  
+  // Check for non-standard resume structure
+  const hasNonStandardStructure = parsedResume.parseConfidence < 70;
+  
+  // Check for potential ESL patterns
+  const eslPatterns = parsedResume.languages.some(l => !['English'].includes(l));
+  
+  if (hasNonStandardStructure || eslPatterns) {
+    return {
+      type: "language_fluency",
+      label: "Resume Language Structure Bias",
+      severity: "medium",
+      contribution: -9,
+      explanation: `Resume language structure or formatting differs from standard Western templates. This may indicate ESL background or international education, neither of which affects job competency.`,
+      jdContext: `${jd.roleTitle} role should evaluate candidates on skill merit, not resume formatting conventions.`
     };
   }
   return null;
@@ -313,6 +368,8 @@ export function processCandidate(
   const hasResume = input.modalities.includes("resume");
   const hasVideo = input.modalities.includes("video");
   const hasAudio = input.modalities.includes("audio");
+  const parsedResume = input.parsedResume;
+  const jdMatchResult = input.jdMatchResult;
   
   // Collect all bias factors
   const biasFactors: BiasFactor[] = [];
@@ -329,14 +386,24 @@ export function processCandidate(
   const backgroundBias = detectBackgroundBias(input.name, jd, hasVideo);
   if (backgroundBias) biasFactors.push(backgroundBias);
   
-  const genderBias = detectGenderLanguageBias(input.name, jd, hasResume);
+  const genderBias = detectGenderLanguageBias(input.name, jd, hasResume, parsedResume);
   if (genderBias) biasFactors.push(genderBias);
   
-  const institutionBias = detectInstitutionBias(input.name, jd, hasResume);
+  const institutionBias = detectInstitutionBias(input.name, jd, hasResume, parsedResume);
   if (institutionBias) biasFactors.push(institutionBias);
   
-  // Calculate scores
-  const originalScore = generateBaseATSScore(input.name, jd);
+  const languageBias = detectResumeLanguageBias(parsedResume, jd);
+  if (languageBias) biasFactors.push(languageBias);
+  
+  // Calculate base score using JD match result if available
+  let originalScore: number;
+  if (jdMatchResult) {
+    // Use JD match as base, with slight variation
+    originalScore = Math.max(60, Math.min(90, jdMatchResult.overallScore - 5 + simpleHash(input.name) % 10));
+  } else {
+    originalScore = generateBaseATSScore(input.name, jd);
+  }
+  
   const totalCorrection = biasFactors.reduce((sum, bf) => sum + Math.abs(bf.contribution), 0);
   const adjustedScore = Math.min(95, originalScore + totalCorrection);
   
@@ -364,6 +431,25 @@ export function processCandidate(
     });
   }
   
+  // Add parsed resume insights to explanations if available
+  if (parsedResume && jdMatchResult) {
+    explanations.push({
+      type: "info",
+      title: "Resume Parsed Successfully",
+      description: `Extracted ${parsedResume.skills.length} skills, ${parsedResume.experience.length} experience entries, and ${parsedResume.education.length} education credentials from uploaded resume.`,
+      impact: 0
+    });
+    
+    if (jdMatchResult.matchedSkills.length > 0) {
+      explanations.push({
+        type: "detection",
+        title: "JD Skill Match Analysis",
+        description: `${jdMatchResult.matchedSkills.length} of ${jd.requiredSkills.length} required skills matched. ${jdMatchResult.missingSkills.length > 0 ? `Missing: ${jdMatchResult.missingSkills.slice(0, 3).join(', ')}` : 'All required skills present.'}`,
+        impact: jdMatchResult.matchedSkills.length * 3
+      });
+    }
+  }
+  
   return {
     id: simpleHash(input.name + jd.id + Date.now().toString()).toString(36),
     name: input.name,
@@ -379,9 +465,14 @@ export function processCandidate(
     explanations,
     counterfactuals,
     fairnessSummary,
-    processedAt: new Date()
+    processedAt: new Date(),
+    parsedResume,
+    jdMatchResult,
+    resumeFileName: input.resumeFileName
   };
 }
+
+
 
 // Calculate dashboard stats
 export function calculateStats(candidates: Candidate[]): {

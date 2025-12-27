@@ -67,6 +67,31 @@ export interface Candidate {
   counterfactuals: CounterfactualScenario[];
   fairnessSummary: string;
   processedAt: Date;
+  // Resume parsing data
+  parsedResume?: {
+    rawText: string;
+    candidateName: string;
+    email: string;
+    phone: string;
+    education: { institution: string; degree: string; field: string; year: string }[];
+    skills: string[];
+    experience: { company: string; title: string; duration: string; description: string }[];
+    projects: { name: string; description: string; technologies: string[] }[];
+    languages: string[];
+    summary: string;
+    parseConfidence: number;
+  };
+  jdMatchResult?: {
+    overallScore: number;
+    matchedSkills: string[];
+    missingSkills: string[];
+    partialMatches: string[];
+    experienceMatch: "below" | "meets" | "exceeds";
+    experienceYears: number;
+    strengthAreas: string[];
+    improvementAreas: string[];
+  };
+  resumeFileName?: string;
 }
 
 export interface DashboardStats {

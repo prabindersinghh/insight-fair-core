@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from "react";
 import type { JobDescription, Candidate, DashboardStats } from "@/types/fairhire";
-import { processCandidate, calculateStats, SAMPLE_CANDIDATES } from "@/lib/biasEngine";
+import { processCandidate, calculateStats, SAMPLE_CANDIDATES, type CandidateInput } from "@/lib/biasEngine";
+import type { ParsedResume, JDMatchResult } from "@/lib/resumeParser";
 
 interface FairHireContextType {
   // Job Description
@@ -12,6 +13,13 @@ interface FairHireContextType {
   // Candidates
   candidates: Candidate[];
   addCandidate: (name: string, modalities: ("resume" | "video" | "audio")[]) => Candidate | null;
+  addCandidateWithResume: (
+    name: string, 
+    modalities: ("resume" | "video" | "audio")[], 
+    parsedResume: ParsedResume, 
+    jdMatchResult: JDMatchResult,
+    resumeFileName: string
+  ) => Candidate | null;
   addSampleCandidates: () => void;
   clearCandidates: () => void;
   getCandidateById: (id: string) => Candidate | undefined;
@@ -149,6 +157,36 @@ export function FairHireProvider({ children }: { children: React.ReactNode }) {
     return newCandidate;
   }, [activeJD, candidates]);
 
+  const addCandidateWithResume = useCallback((
+    name: string, 
+    modalities: ("resume" | "video" | "audio")[], 
+    parsedResume: ParsedResume, 
+    jdMatchResult: JDMatchResult,
+    resumeFileName: string
+  ): Candidate | null => {
+    if (!activeJD) return null;
+    
+    const currentCandidates = candidates.filter(c => c.jobDescriptionId === activeJD.id);
+    
+    // Max 6 candidates per JD for demo stability
+    if (currentCandidates.length >= 6) {
+      return null;
+    }
+    
+    const candidateInput: CandidateInput = { 
+      name, 
+      position: activeJD.roleTitle, 
+      modalities,
+      parsedResume,
+      jdMatchResult,
+      resumeFileName
+    };
+    const newCandidate = processCandidate(candidateInput, activeJD, currentCandidates.length);
+    
+    setCandidates(prev => [...prev, newCandidate]);
+    return newCandidate;
+  }, [activeJD, candidates]);
+
   const addSampleCandidates = useCallback(() => {
     if (!activeJD) return;
     
@@ -192,6 +230,7 @@ export function FairHireProvider({ children }: { children: React.ReactNode }) {
         setActiveJD,
         candidates,
         addCandidate,
+        addCandidateWithResume,
         addSampleCandidates,
         clearCandidates,
         getCandidateById,

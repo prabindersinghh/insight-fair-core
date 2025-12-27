@@ -9,7 +9,7 @@ import { ExplainabilityPanel } from "@/components/dashboard/ExplainabilityPanel"
 import { CounterfactualComparison } from "@/components/dashboard/CounterfactualComparison";
 import { FairnessGauge } from "@/components/dashboard/FairnessGauge";
 import { ActiveJDCard } from "@/components/dashboard/ActiveJDCard";
-import { CandidateUploadModal } from "@/components/dashboard/CandidateUploadModal";
+import { ResumeUploadModal } from "@/components/dashboard/ResumeUploadModal";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -123,13 +123,13 @@ const Dashboard = () => {
               <RefreshCw className="h-4 w-4 mr-2" />
               Refresh
             </Button>
-            <CandidateUploadModal
+            <ResumeUploadModal
               open={uploadModalOpen}
               onOpenChange={setUploadModalOpen}
               trigger={
                 <Button variant="hero" size="sm">
                   <Upload className="h-4 w-4 mr-2" />
-                  Upload Data
+                  Upload Resume
                 </Button>
               }
             />
