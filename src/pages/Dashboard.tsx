@@ -115,75 +115,11 @@ const Dashboard = () => {
         </div>
 
         {selectedCandidate && activeJD ? (
-          /* CANDIDATE DETAIL VIEW - EXPLAINABLE PIPELINE */
-          <div className="space-y-6">
-            {/* Pipeline Header */}
-            <div className="p-4 rounded-lg bg-muted/30 border border-border">
-              <h2 className="font-display text-lg font-semibold mb-2">
-                Evaluation Pipeline
-              </h2>
-              <p className="text-sm text-muted-foreground">
-                Follow the step-by-step analysis below to understand how {selectedCandidate.name}'s 
-                evaluation was computed. Each step builds upon the previous one.
-              </p>
-              <div className="flex items-center gap-2 mt-3 text-xs text-muted-foreground">
-                <Badge variant="secondary">JD Context</Badge>
-                <ArrowDown className="h-3 w-3" />
-                <Badge variant="secondary">Resume Parsing</Badge>
-                <ArrowDown className="h-3 w-3" />
-                <Badge variant="secondary">JD Matching</Badge>
-                <ArrowDown className="h-3 w-3" />
-                <Badge variant="secondary">Bias Detection</Badge>
-                <ArrowDown className="h-3 w-3" />
-                <Badge variant="secondary">Final Score</Badge>
-              </div>
-            </div>
-
-            {/* STEP 0: Job Description Context */}
-            <JDContextPanel jobDescription={activeJD} />
-
-            {/* STEP 1: Resume Parsing Output */}
-            <ParsedResumePanel candidate={selectedCandidate} />
-
-            {/* STEP 2: JD-Resume Alignment */}
-            <JDResumeAlignment candidate={selectedCandidate} />
-
-            {/* STEP 3: Bias Signals Detection */}
-            <BiasSignalsPanel 
-              biasFactors={selectedCandidate.biasFactors} 
-              candidateName={selectedCandidate.name}
-            />
-
-            {/* STEP 4: Score Evolution */}
-            <ScoreEvolutionPanel
-              originalScore={selectedCandidate.originalScore}
-              adjustedScore={selectedCandidate.adjustedScore}
-              jdMatchScore={selectedCandidate.jdMatchResult?.overallScore}
-              biasFactorsCount={selectedCandidate.biasFactors.length}
-            />
-
-            {/* Additional Explainability */}
-            <ExplainabilityPanel 
-              candidateName={selectedCandidate.name} 
-              explanations={selectedCandidate.explanations} 
-              onDownloadReport={handleDownloadReport} 
-            />
-
-            {/* Pipeline Summary */}
-            <Card variant="elevated" className="border-primary/20 bg-primary/5">
-              <CardContent className="p-4">
-                <p className="text-sm">
-                  <strong>Summary:</strong> {selectedCandidate.fairnessSummary}
-                </p>
-                {selectedCandidate.status === "review" && (
-                  <p className="text-sm text-caution mt-2">
-                    ⚠️ This candidate has been flagged for human review due to detected bias patterns 
-                    that may require additional context.
-                  </p>
-                )}
-              </CardContent>
-            </Card>
-          </div>
+          /* CANDIDATE DETAIL VIEW - 5-LAYER EVALUATION PIPELINE */
+          <EvaluationPipeline 
+            candidate={selectedCandidate} 
+            jobDescription={activeJD} 
+          />
         ) : (
           /* OVERVIEW VIEW */
           <div className="space-y-8">
