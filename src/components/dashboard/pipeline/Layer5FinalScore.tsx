@@ -22,26 +22,40 @@ export function Layer5FinalScore({ candidate, isActive, isComplete, onComplete }
   const isPositive = adjustment > 0;
   const needsReview = candidate.status === "review";
 
+  // Keep expanded when active
+  useEffect(() => {
+    if (isActive) setIsExpanded(true);
+  }, [isActive]);
+
   useEffect(() => {
     if (isActive && !isComplete) {
       setStage("consolidating");
       setProgress(0);
 
+      // Slower, more visible animation
+      const interval = setInterval(() => {
+        setProgress(prev => {
+          if (prev < 50) return prev + 3;
+          if (prev < 100) return prev + 4;
+          return prev;
+        });
+      }, 80);
+
       const timer1 = setTimeout(() => {
-        setProgress(50);
         setStage("explaining");
-      }, 500);
+      }, 1200);
 
       const timer2 = setTimeout(() => {
         setProgress(100);
         setStage("complete");
-      }, 900);
+      }, 2200);
 
       const timer3 = setTimeout(() => {
         onComplete();
-      }, 1100);
+      }, 2800);
 
       return () => {
+        clearInterval(interval);
         clearTimeout(timer1);
         clearTimeout(timer2);
         clearTimeout(timer3);
@@ -65,7 +79,7 @@ export function Layer5FinalScore({ candidate, isActive, isComplete, onComplete }
   };
 
   return (
-    <Card variant="elevated" className={`transition-all duration-300 ${isComplete ? "border-primary/50 bg-gradient-to-br from-primary/5 to-transparent" : isActive ? "border-primary/40 ring-2 ring-primary/20" : "border-border opacity-60"}`}>
+    <Card variant="elevated" className={`transition-all duration-500 ${isComplete ? "border-primary/50 bg-gradient-to-br from-primary/5 to-transparent" : isActive ? "border-primary/40 ring-2 ring-primary/20 shadow-lg shadow-primary/10" : "border-border opacity-50"}`}>
       <Collapsible open={isExpanded} onOpenChange={setIsExpanded}>
         <CardHeader className="pb-3">
           <CollapsibleTrigger className="w-full">
