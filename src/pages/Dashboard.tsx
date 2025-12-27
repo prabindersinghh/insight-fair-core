@@ -4,16 +4,11 @@ import { StatsOverview } from "@/components/dashboard/StatsOverview";
 import { CandidateCard } from "@/components/dashboard/CandidateCard";
 import { ActiveJDCard } from "@/components/dashboard/ActiveJDCard";
 import { ResumeUploadModal } from "@/components/dashboard/ResumeUploadModal";
-import { JDContextPanel } from "@/components/dashboard/JDContextPanel";
-import { ParsedResumePanel } from "@/components/dashboard/ParsedResumePanel";
-import { JDResumeAlignment } from "@/components/dashboard/JDResumeAlignment";
-import { BiasSignalsPanel } from "@/components/dashboard/BiasSignalsPanel";
-import { ScoreEvolutionPanel } from "@/components/dashboard/ScoreEvolutionPanel";
-import { ExplainabilityPanel } from "@/components/dashboard/ExplainabilityPanel";
+import { EvaluationPipeline } from "@/components/dashboard/pipeline";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Upload, Filter, RefreshCw, ChevronLeft, AlertTriangle, ArrowDown } from "lucide-react";
+import { Upload, Filter, RefreshCw, ChevronLeft, AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
 import { useFairHire } from "@/contexts/FairHireContext";
 import {
