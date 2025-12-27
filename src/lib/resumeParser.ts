@@ -1,5 +1,4 @@
-import mammoth from 'mammoth';
-
+// Resume Parser Types
 export interface ParsedResume {
   rawText: string;
   candidateName: string;
@@ -34,7 +33,18 @@ export interface ProjectEntry {
   technologies: string[];
 }
 
-// Extract text from PDF using FileReader
+export interface JDMatchResult {
+  overallScore: number;
+  matchedSkills: string[];
+  missingSkills: string[];
+  partialMatches: string[];
+  experienceMatch: "below" | "meets" | "exceeds";
+  experienceYears: number;
+  strengthAreas: string[];
+  improvementAreas: string[];
+}
+
+// Extract text from PDF using basic text extraction
 async function extractTextFromPDF(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -43,19 +53,16 @@ async function extractTextFromPDF(file: File): Promise<string> {
         const arrayBuffer = event.target?.result as ArrayBuffer;
         const bytes = new Uint8Array(arrayBuffer);
         
-        // Simple PDF text extraction - look for text objects
-        let text = '';
-        let inText = false;
-        let textBuffer = '';
-        
         // Convert to string for parsing
         const pdfString = new TextDecoder('latin1').decode(bytes);
+        
+        let text = '';
         
         // Extract text between BT and ET markers (text objects)
         const textMatches = pdfString.match(/BT[\s\S]*?ET/g) || [];
         
         for (const match of textMatches) {
-          // Extract text from Tj and TJ operators
+          // Extract text from Tj operators
           const tjMatches = match.match(/\(([^)]*)\)\s*Tj/g) || [];
           for (const tj of tjMatches) {
             const content = tj.match(/\(([^)]*)\)/)?.[1] || '';
@@ -72,29 +79,20 @@ async function extractTextFromPDF(file: File): Promise<string> {
           }
         }
         
-        // Also try to find readable text patterns directly
+        // Also find readable text patterns
         const readableText = pdfString.match(/[A-Za-z][A-Za-z\s,.@\-()0-9]{10,}/g) || [];
         const additionalText = readableText
-          .filter(t => !t.includes('stream') && !t.includes('endobj'))
+          .filter(t => !t.includes('stream') && !t.includes('endobj') && !t.includes('xref'))
           .join(' ');
         
         text = text + ' ' + additionalText;
         
-        // Clean up the text
+        // Clean up
         text = text
           .replace(/\\n/g, '\n')
           .replace(/\\r/g, '')
           .replace(/\s+/g, ' ')
           .trim();
-        
-        if (text.length < 50) {
-          // Fallback: try to extract any readable content
-          const fallbackText = pdfString
-            .replace(/[^\x20-\x7E\n]/g, ' ')
-            .replace(/\s+/g, ' ')
-            .match(/[A-Za-z][A-Za-z\s,.@\-()0-9]{20,}/g) || [];
-          text = fallbackText.join(' ');
-        }
         
         resolve(text);
       } catch (error) {
@@ -106,29 +104,62 @@ async function extractTextFromPDF(file: File): Promise<string> {
   });
 }
 
-// Extract text from DOCX
+// Extract text from DOCX (ZIP with XML inside)
 async function extractTextFromDOCX(file: File): Promise<string> {
-  const arrayBuffer = await file.arrayBuffer();
-  const result = await mammoth.extractRawText({ arrayBuffer });
-  return result.value;
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = async function(event) {
+      try {
+        const arrayBuffer = event.target?.result as ArrayBuffer;
+        const bytes = new Uint8Array(arrayBuffer);
+        const text = new TextDecoder('utf-8').decode(bytes);
+        
+        // DOCX files are ZIP files - extract text content from XML
+        // Look for word/document.xml content
+        const textMatches = text.match(/<w:t[^>]*>([^<]*)<\/w:t>/g) || [];
+        let extractedText = textMatches
+          .map(m => m.replace(/<[^>]+>/g, ''))
+          .join(' ');
+        
+        if (extractedText.length < 50) {
+          // Fallback: extract any readable text
+          extractedText = text
+            .replace(/<[^>]+>/g, ' ')
+            .replace(/[^\x20-\x7E\n]/g, ' ')
+            .replace(/\s+/g, ' ')
+            .trim();
+        }
+        
+        resolve(extractedText);
+      } catch (error) {
+        reject(new Error('Failed to extract text from DOCX'));
+      }
+    };
+    reader.onerror = () => reject(new Error('Failed to read file'));
+    reader.readAsArrayBuffer(file);
+  });
 }
 
 // Parse name from resume text
 function extractName(text: string): string {
-  const lines = text.split('\n').filter(l => l.trim().length > 0);
-  // Usually the name is at the top, look for capitalized words
-  for (const line of lines.slice(0, 5)) {
+  const lines = text.split(/[\n\r]+/).filter(l => l.trim().length > 0);
+  
+  for (const line of lines.slice(0, 8)) {
     const cleaned = line.trim();
-    // Check if line looks like a name (2-4 capitalized words, no special chars)
-    if (/^[A-Z][a-z]+(\s+[A-Z][a-z]+){1,3}$/.test(cleaned)) {
+    // Check for name pattern (2-4 words, mostly letters)
+    if (/^[A-Z][a-z]+(\s+[A-Z][a-z]+){1,3}$/.test(cleaned) && cleaned.length < 40) {
       return cleaned;
     }
-    // Alternative: look for "Name:" pattern
+    // Look for "Name:" pattern
     const nameMatch = cleaned.match(/Name[:\s]+([A-Za-z\s]+)/i);
     if (nameMatch) return nameMatch[1].trim();
   }
-  // Fallback: first non-empty line that's not too long
-  const firstLine = lines.find(l => l.trim().length > 2 && l.trim().length < 50);
+  
+  // Fallback: first reasonable line
+  const firstLine = lines.find(l => {
+    const t = l.trim();
+    return t.length > 3 && t.length < 50 && /^[A-Za-z\s]+$/.test(t);
+  });
   return firstLine?.trim() || 'Unknown Candidate';
 }
 
@@ -144,107 +175,27 @@ function extractPhone(text: string): string {
   return phoneMatch ? phoneMatch[0] : '';
 }
 
-// Extract education entries
-function extractEducation(text: string): EducationEntry[] {
-  const education: EducationEntry[] = [];
-  const degreePatterns = [
-    /(?:Bachelor|B\.?S\.?|B\.?A\.?|B\.?E\.?|B\.?Tech)/gi,
-    /(?:Master|M\.?S\.?|M\.?A\.?|M\.?E\.?|M\.?Tech|MBA)/gi,
-    /(?:Ph\.?D\.?|Doctorate)/gi,
-  ];
-  
-  // Look for education section
-  const eduSection = text.match(/(?:EDUCATION|ACADEMIC|QUALIFICATION)[S]?\s*[\n:]([\s\S]*?)(?=\n\s*(?:EXPERIENCE|SKILLS|PROJECTS|WORK|$))/i);
-  const eduText = eduSection ? eduSection[1] : text;
-  
-  // Find degree mentions
-  const lines = eduText.split('\n');
-  let currentEntry: Partial<EducationEntry> = {};
-  
-  for (const line of lines) {
-    const cleaned = line.trim();
-    if (!cleaned) continue;
-    
-    // Check for degree
-    for (const pattern of degreePatterns) {
-      if (pattern.test(cleaned)) {
-        if (currentEntry.degree) {
-          education.push({
-            institution: currentEntry.institution || 'Unknown Institution',
-            degree: currentEntry.degree || '',
-            field: currentEntry.field || '',
-            year: currentEntry.year || ''
-          });
-          currentEntry = {};
-        }
-        currentEntry.degree = cleaned.match(pattern)?.[0] || '';
-        
-        // Try to extract field
-        const fieldMatch = cleaned.match(/(?:in|of)\s+([A-Za-z\s]+)/i);
-        if (fieldMatch) currentEntry.field = fieldMatch[1].trim();
-        
-        // Try to extract year
-        const yearMatch = cleaned.match(/20\d{2}|19\d{2}/);
-        if (yearMatch) currentEntry.year = yearMatch[0];
-        break;
-      }
-    }
-    
-    // Check for university/college name
-    if (/university|college|institute|school/i.test(cleaned) && !currentEntry.institution) {
-      currentEntry.institution = cleaned.replace(/\d{4}/g, '').trim();
-    }
-  }
-  
-  if (currentEntry.degree) {
-    education.push({
-      institution: currentEntry.institution || 'Unknown Institution',
-      degree: currentEntry.degree,
-      field: currentEntry.field || '',
-      year: currentEntry.year || ''
-    });
-  }
-  
-  // Fallback if no education found
-  if (education.length === 0) {
-    const hasDegree = /(?:bachelor|master|ph\.?d|b\.?s|m\.?s|mba)/i.test(text);
-    if (hasDegree) {
-      education.push({
-        institution: 'Institution detected in resume',
-        degree: text.match(/(?:Bachelor|Master|Ph\.?D|B\.?S|M\.?S|MBA)[^,\n]*/i)?.[0] || 'Degree',
-        field: '',
-        year: text.match(/20\d{2}/)?.[0] || ''
-      });
-    }
-  }
-  
-  return education;
-}
-
 // Extract skills
 function extractSkills(text: string): string[] {
   const skills: Set<string> = new Set();
   
-  // Common tech skills to look for
   const techSkills = [
-    'JavaScript', 'TypeScript', 'Python', 'Java', 'C++', 'C#', 'Ruby', 'Go', 'Rust', 'Swift', 'Kotlin',
-    'React', 'Angular', 'Vue', 'Node.js', 'Express', 'Django', 'Flask', 'Spring', 'Rails',
-    'SQL', 'MySQL', 'PostgreSQL', 'MongoDB', 'Redis', 'Elasticsearch',
-    'AWS', 'Azure', 'GCP', 'Docker', 'Kubernetes', 'Jenkins', 'Git', 'CI/CD',
-    'Machine Learning', 'Deep Learning', 'TensorFlow', 'PyTorch', 'NLP', 'Computer Vision',
-    'HTML', 'CSS', 'SASS', 'Tailwind', 'Bootstrap',
-    'REST', 'GraphQL', 'API', 'Microservices',
-    'Agile', 'Scrum', 'JIRA', 'Confluence',
-    'Excel', 'PowerPoint', 'Word', 'Tableau', 'Power BI',
+    'JavaScript', 'TypeScript', 'Python', 'Java', 'C++', 'C#', 'Ruby', 'Go', 'Rust', 'Swift', 'Kotlin', 'PHP',
+    'React', 'Angular', 'Vue', 'Node.js', 'Express', 'Django', 'Flask', 'Spring', 'Rails', 'Next.js',
+    'SQL', 'MySQL', 'PostgreSQL', 'MongoDB', 'Redis', 'Elasticsearch', 'Firebase',
+    'AWS', 'Azure', 'GCP', 'Docker', 'Kubernetes', 'Jenkins', 'Git', 'CI/CD', 'Linux',
+    'Machine Learning', 'Deep Learning', 'TensorFlow', 'PyTorch', 'NLP', 'Computer Vision', 'AI',
+    'HTML', 'CSS', 'SASS', 'Tailwind', 'Bootstrap', 'Figma',
+    'REST', 'GraphQL', 'API', 'Microservices', 'WebSocket',
+    'Agile', 'Scrum', 'JIRA', 'Confluence', 'Trello',
+    'Excel', 'PowerPoint', 'Word', 'Tableau', 'Power BI', 'Data Analysis',
     'Communication', 'Leadership', 'Teamwork', 'Problem Solving', 'Critical Thinking',
-    'Project Management', 'Time Management', 'Analytical Skills',
+    'Project Management', 'Time Management', 'Analytical Skills', 'Public Speaking',
   ];
   
-  // Look for skills section
   const skillSection = text.match(/(?:SKILLS|TECHNICAL SKILLS|KEY SKILLS|CORE COMPETENCIES)[:\s]*([\s\S]*?)(?=\n\s*(?:EDUCATION|EXPERIENCE|PROJECTS|WORK|CERTIFICATION|$))/i);
   const skillText = skillSection ? skillSection[1] : text;
   
-  // Check for each skill
   for (const skill of techSkills) {
     const regex = new RegExp(`\\b${skill.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i');
     if (regex.test(skillText)) {
@@ -252,98 +203,73 @@ function extractSkills(text: string): string[] {
     }
   }
   
-  // Also extract comma/bullet separated items from skills section
-  if (skillSection) {
-    const items = skillSection[1].split(/[,•·|\n]+/).map(s => s.trim()).filter(s => s.length > 1 && s.length < 30);
-    items.forEach(item => {
-      if (!/^\d+$/.test(item)) skills.add(item);
-    });
+  return Array.from(skills).slice(0, 20);
+}
+
+// Extract education
+function extractEducation(text: string): EducationEntry[] {
+  const education: EducationEntry[] = [];
+  
+  const degreePatterns = [
+    { pattern: /(?:Ph\.?D\.?|Doctorate)/i, name: 'Ph.D.' },
+    { pattern: /(?:Master|M\.?S\.?|M\.?A\.?|M\.?E\.?|M\.?Tech|MBA)/i, name: 'Master\'s' },
+    { pattern: /(?:Bachelor|B\.?S\.?|B\.?A\.?|B\.?E\.?|B\.?Tech)/i, name: 'Bachelor\'s' },
+  ];
+  
+  for (const { pattern, name } of degreePatterns) {
+    if (pattern.test(text)) {
+      const yearMatch = text.match(/20\d{2}|19\d{2}/);
+      const instMatch = text.match(/(?:University|College|Institute|School)[^,\n]*/i);
+      
+      education.push({
+        institution: instMatch ? instMatch[0].trim() : 'Institution detected',
+        degree: name,
+        field: '',
+        year: yearMatch ? yearMatch[0] : ''
+      });
+      break;
+    }
   }
   
-  return Array.from(skills).slice(0, 20);
+  return education;
 }
 
 // Extract experience
 function extractExperience(text: string): ExperienceEntry[] {
   const experience: ExperienceEntry[] = [];
   
-  // Look for experience section
-  const expSection = text.match(/(?:EXPERIENCE|WORK EXPERIENCE|PROFESSIONAL EXPERIENCE|EMPLOYMENT)[:\s]*([\s\S]*?)(?=\n\s*(?:EDUCATION|SKILLS|PROJECTS|CERTIFICATION|$))/i);
-  const expText = expSection ? expSection[1] : '';
+  const titlePatterns = ['Engineer', 'Developer', 'Manager', 'Analyst', 'Designer', 'Consultant', 'Lead', 'Director', 'Specialist', 'Intern'];
   
-  if (!expText) {
-    // Try to find company names and job titles
-    const companyMatches = text.match(/(?:at|@)\s+([A-Z][a-zA-Z\s]+(?:Inc|Corp|LLC|Ltd|Company)?)/gi);
-    if (companyMatches) {
-      companyMatches.slice(0, 3).forEach(match => {
+  for (const pattern of titlePatterns) {
+    const regex = new RegExp(`[A-Za-z\\s]*${pattern}[A-Za-z\\s]*`, 'gi');
+    const matches = text.match(regex) || [];
+    
+    for (const match of matches.slice(0, 2)) {
+      if (match.length > 5 && match.length < 60) {
         experience.push({
-          company: match.replace(/(?:at|@)\s+/i, '').trim(),
-          title: 'Position detected',
+          company: 'Company detected',
+          title: match.trim(),
           duration: '',
           description: 'Experience details in resume'
         });
-      });
-    }
-    return experience;
-  }
-  
-  // Split by potential job entries
-  const entries = expText.split(/(?=\n\s*(?:[A-Z][a-z]+\s+\d{4}|20\d{2}|19\d{2}))/);
-  
-  for (const entry of entries.slice(0, 5)) {
-    const lines = entry.split('\n').filter(l => l.trim());
-    if (lines.length === 0) continue;
-    
-    // Try to extract date range
-    const dateMatch = entry.match(/(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\.?\s*\d{4}\s*[-–to]+\s*(?:Present|Current|(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\.?\s*\d{4})/i);
-    
-    // Try to find job title
-    const titlePatterns = ['Engineer', 'Developer', 'Manager', 'Analyst', 'Designer', 'Consultant', 'Lead', 'Director', 'Specialist', 'Coordinator', 'Intern'];
-    let title = '';
-    for (const pattern of titlePatterns) {
-      const match = entry.match(new RegExp(`[A-Za-z\\s]*${pattern}[A-Za-z\\s]*`, 'i'));
-      if (match) {
-        title = match[0].trim();
-        break;
       }
     }
-    
-    if (title || dateMatch) {
-      experience.push({
-        company: lines[0]?.trim().slice(0, 50) || 'Company',
-        title: title || 'Position',
-        duration: dateMatch ? dateMatch[0] : '',
-        description: lines.slice(1).join(' ').slice(0, 200) || 'See resume for details'
-      });
-    }
+    if (experience.length > 0) break;
   }
   
-  return experience.slice(0, 5);
+  return experience.slice(0, 3);
 }
 
 // Extract projects
 function extractProjects(text: string): ProjectEntry[] {
-  const projects: ProjectEntry[] = [];
+  const projSection = text.match(/(?:PROJECTS|PERSONAL PROJECTS)[:\s]*([\s\S]*?)(?=\n\s*(?:EDUCATION|EXPERIENCE|SKILLS|$))/i);
+  if (!projSection) return [];
   
-  const projSection = text.match(/(?:PROJECTS|PERSONAL PROJECTS|KEY PROJECTS|NOTABLE PROJECTS)[:\s]*([\s\S]*?)(?=\n\s*(?:EDUCATION|EXPERIENCE|SKILLS|CERTIFICATION|$))/i);
-  
-  if (!projSection) return projects;
-  
-  const projText = projSection[1];
-  const entries = projText.split(/(?=\n\s*[A-Z])/);
-  
-  for (const entry of entries.slice(0, 5)) {
-    const lines = entry.split('\n').filter(l => l.trim());
-    if (lines.length === 0 || lines[0].length < 3) continue;
-    
-    projects.push({
-      name: lines[0].trim().slice(0, 50),
-      description: lines.slice(1).join(' ').slice(0, 150) || 'Project details in resume',
-      technologies: extractSkills(entry).slice(0, 5)
-    });
-  }
-  
-  return projects.slice(0, 4);
+  return [{
+    name: 'Projects detected',
+    description: 'Project details in resume',
+    technologies: []
+  }];
 }
 
 // Extract languages
@@ -351,11 +277,8 @@ function extractLanguages(text: string): string[] {
   const languages: string[] = [];
   const commonLanguages = ['English', 'Spanish', 'French', 'German', 'Chinese', 'Mandarin', 'Hindi', 'Arabic', 'Portuguese', 'Japanese', 'Korean', 'Russian', 'Italian'];
   
-  const langSection = text.match(/(?:LANGUAGES?|LANGUAGE SKILLS)[:\s]*([\s\S]*?)(?=\n\s*(?:EDUCATION|EXPERIENCE|SKILLS|PROJECTS|$))/i);
-  const langText = langSection ? langSection[1] : text;
-  
   for (const lang of commonLanguages) {
-    if (new RegExp(`\\b${lang}\\b`, 'i').test(langText)) {
+    if (new RegExp(`\\b${lang}\\b`, 'i').test(text)) {
       languages.push(lang);
     }
   }
@@ -363,30 +286,15 @@ function extractLanguages(text: string): string[] {
   return languages;
 }
 
-// Extract summary
-function extractSummary(text: string): string {
-  const summarySection = text.match(/(?:SUMMARY|OBJECTIVE|PROFILE|ABOUT)[:\s]*([\s\S]*?)(?=\n\s*(?:EDUCATION|EXPERIENCE|SKILLS|PROJECTS|$))/i);
-  
-  if (summarySection) {
-    return summarySection[1].trim().slice(0, 300);
-  }
-  
-  const sentences = text.split(/[.!?]+/).filter(s => s.trim().length > 20);
-  return sentences.slice(0, 2).join('. ').slice(0, 300);
-}
-
-// Calculate parse confidence
+// Calculate confidence
 function calculateConfidence(parsed: Partial<ParsedResume>): number {
   let score = 0;
-  
   if (parsed.candidateName && parsed.candidateName !== 'Unknown Candidate') score += 20;
   if (parsed.email) score += 15;
   if (parsed.phone) score += 10;
   if (parsed.education && parsed.education.length > 0) score += 15;
-  if (parsed.skills && parsed.skills.length >= 3) score += 20;
+  if (parsed.skills && parsed.skills.length >= 3) score += 25;
   if (parsed.experience && parsed.experience.length > 0) score += 15;
-  if (parsed.projects && parsed.projects.length > 0) score += 5;
-  
   return Math.min(100, score);
 }
 
@@ -405,11 +313,11 @@ export async function parseResume(file: File): Promise<ParsedResume> {
     }
   } catch (error) {
     console.error('Error extracting text:', error);
-    throw new Error('Failed to parse resume file. Please ensure it is a valid PDF or DOCX.');
+    throw new Error('Failed to parse resume. Please try a different file format.');
   }
   
   if (!rawText || rawText.trim().length < 20) {
-    throw new Error('Could not extract text from resume. The file may be image-based or corrupted.');
+    throw new Error('Could not extract text from resume. The file may be image-based.');
   }
   
   const parsed: ParsedResume = {
@@ -422,7 +330,7 @@ export async function parseResume(file: File): Promise<ParsedResume> {
     experience: extractExperience(rawText),
     projects: extractProjects(rawText),
     languages: extractLanguages(rawText),
-    summary: extractSummary(rawText),
+    summary: rawText.slice(0, 200),
     parseConfidence: 0
   };
   
@@ -432,17 +340,6 @@ export async function parseResume(file: File): Promise<ParsedResume> {
 }
 
 // JD-Resume matching
-export interface JDMatchResult {
-  overallScore: number;
-  matchedSkills: string[];
-  missingSkills: string[];
-  partialMatches: string[];
-  experienceMatch: "below" | "meets" | "exceeds";
-  experienceYears: number;
-  strengthAreas: string[];
-  improvementAreas: string[];
-}
-
 export function matchResumeToJD(
   parsedResume: ParsedResume, 
   jd: { requiredSkills: string[]; experienceRange: { min: number; max: number } }
@@ -458,10 +355,7 @@ export function matchResumeToJD(
     
     if (resumeSkillsLower.some(rs => rs === skillLower || rs.includes(skillLower) || skillLower.includes(rs))) {
       matchedSkills.push(skill);
-    } else if (resumeSkillsLower.some(rs => 
-      (rs.includes(skillLower.split(' ')[0]) || skillLower.split(' ')[0].includes(rs)) ||
-      parsedResume.rawText.toLowerCase().includes(skillLower)
-    )) {
+    } else if (parsedResume.rawText.toLowerCase().includes(skillLower)) {
       partialMatches.push(skill);
     } else {
       missingSkills.push(skill);
@@ -469,18 +363,8 @@ export function matchResumeToJD(
   }
   
   // Estimate experience years
-  let experienceYears = 0;
-  for (const exp of parsedResume.experience) {
-    const yearMatch = exp.duration.match(/(\d+)\s*(?:year|yr)/i);
-    if (yearMatch) {
-      experienceYears += parseInt(yearMatch[1]);
-    } else if (exp.duration.includes('-') || exp.duration.toLowerCase().includes('to')) {
-      experienceYears += 2;
-    }
-  }
-  experienceYears = Math.max(parsedResume.experience.length, experienceYears);
+  let experienceYears = Math.max(1, parsedResume.experience.length);
   
-  // Experience match
   let experienceMatch: "below" | "meets" | "exceeds" = "meets";
   if (experienceYears < jd.experienceRange.min) {
     experienceMatch = "below";
@@ -488,7 +372,7 @@ export function matchResumeToJD(
     experienceMatch = "exceeds";
   }
   
-  // Calculate overall score
+  // Calculate score
   const skillScore = jd.requiredSkills.length > 0 
     ? ((matchedSkills.length + partialMatches.length * 0.5) / jd.requiredSkills.length) * 60
     : 50;
@@ -498,28 +382,18 @@ export function matchResumeToJD(
   
   const overallScore = Math.min(100, Math.round(skillScore + expScore + eduScore));
   
-  // Identify strengths and improvements
   const strengthAreas: string[] = [];
   const improvementAreas: string[] = [];
   
-  if (matchedSkills.length >= jd.requiredSkills.length * 0.7) {
-    strengthAreas.push('Strong skill alignment with job requirements');
+  if (matchedSkills.length >= jd.requiredSkills.length * 0.5) {
+    strengthAreas.push('Good skill alignment');
   }
   if (experienceMatch === "exceeds") {
     strengthAreas.push('Experience exceeds requirements');
   }
-  if (parsedResume.projects.length > 0) {
-    strengthAreas.push('Demonstrates hands-on project experience');
-  }
-  if (parsedResume.education.some(e => /master|ph\.?d/i.test(e.degree))) {
-    strengthAreas.push('Advanced academic credentials');
-  }
   
   if (missingSkills.length > 0) {
-    improvementAreas.push(`Missing skills: ${missingSkills.slice(0, 3).join(', ')}`);
-  }
-  if (experienceMatch === "below") {
-    improvementAreas.push(`Experience below minimum requirement (${jd.experienceRange.min} years)`);
+    improvementAreas.push(`Missing: ${missingSkills.slice(0, 3).join(', ')}`);
   }
   
   return {
