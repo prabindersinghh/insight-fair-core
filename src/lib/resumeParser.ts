@@ -1,8 +1,4 @@
-import * as pdfjsLib from 'pdfjs-dist';
 import mammoth from 'mammoth';
-
-// Configure PDF.js worker
-pdfjsLib.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/4.0.379/pdf.worker.min.js`;
 
 export interface ParsedResume {
   rawText: string;
@@ -38,22 +34,76 @@ export interface ProjectEntry {
   technologies: string[];
 }
 
-// Extract text from PDF
+// Extract text from PDF using FileReader
 async function extractTextFromPDF(file: File): Promise<string> {
-  const arrayBuffer = await file.arrayBuffer();
-  const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
-  
-  let fullText = '';
-  for (let i = 1; i <= pdf.numPages; i++) {
-    const page = await pdf.getPage(i);
-    const textContent = await page.getTextContent();
-    const pageText = textContent.items
-      .map((item: any) => item.str)
-      .join(' ');
-    fullText += pageText + '\n';
-  }
-  
-  return fullText;
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = async function(event) {
+      try {
+        const arrayBuffer = event.target?.result as ArrayBuffer;
+        const bytes = new Uint8Array(arrayBuffer);
+        
+        // Simple PDF text extraction - look for text objects
+        let text = '';
+        let inText = false;
+        let textBuffer = '';
+        
+        // Convert to string for parsing
+        const pdfString = new TextDecoder('latin1').decode(bytes);
+        
+        // Extract text between BT and ET markers (text objects)
+        const textMatches = pdfString.match(/BT[\s\S]*?ET/g) || [];
+        
+        for (const match of textMatches) {
+          // Extract text from Tj and TJ operators
+          const tjMatches = match.match(/\(([^)]*)\)\s*Tj/g) || [];
+          for (const tj of tjMatches) {
+            const content = tj.match(/\(([^)]*)\)/)?.[1] || '';
+            text += content + ' ';
+          }
+          
+          // Extract from TJ arrays
+          const tjArrays = match.match(/\[(.*?)\]\s*TJ/g) || [];
+          for (const arr of tjArrays) {
+            const contents = arr.match(/\(([^)]*)\)/g) || [];
+            for (const c of contents) {
+              text += c.slice(1, -1) + ' ';
+            }
+          }
+        }
+        
+        // Also try to find readable text patterns directly
+        const readableText = pdfString.match(/[A-Za-z][A-Za-z\s,.@\-()0-9]{10,}/g) || [];
+        const additionalText = readableText
+          .filter(t => !t.includes('stream') && !t.includes('endobj'))
+          .join(' ');
+        
+        text = text + ' ' + additionalText;
+        
+        // Clean up the text
+        text = text
+          .replace(/\\n/g, '\n')
+          .replace(/\\r/g, '')
+          .replace(/\s+/g, ' ')
+          .trim();
+        
+        if (text.length < 50) {
+          // Fallback: try to extract any readable content
+          const fallbackText = pdfString
+            .replace(/[^\x20-\x7E\n]/g, ' ')
+            .replace(/\s+/g, ' ')
+            .match(/[A-Za-z][A-Za-z\s,.@\-()0-9]{20,}/g) || [];
+          text = fallbackText.join(' ');
+        }
+        
+        resolve(text);
+      } catch (error) {
+        reject(new Error('Failed to extract text from PDF'));
+      }
+    };
+    reader.onerror = () => reject(new Error('Failed to read file'));
+    reader.readAsArrayBuffer(file);
+  });
 }
 
 // Extract text from DOCX
@@ -210,7 +260,7 @@ function extractSkills(text: string): string[] {
     });
   }
   
-  return Array.from(skills).slice(0, 20); // Limit to 20 skills
+  return Array.from(skills).slice(0, 20);
 }
 
 // Extract experience
@@ -237,7 +287,7 @@ function extractExperience(text: string): ExperienceEntry[] {
     return experience;
   }
   
-  // Split by potential job entries (look for date patterns or company names)
+  // Split by potential job entries
   const entries = expText.split(/(?=\n\s*(?:[A-Z][a-z]+\s+\d{4}|20\d{2}|19\d{2}))/);
   
   for (const entry of entries.slice(0, 5)) {
@@ -275,7 +325,6 @@ function extractExperience(text: string): ExperienceEntry[] {
 function extractProjects(text: string): ProjectEntry[] {
   const projects: ProjectEntry[] = [];
   
-  // Look for projects section
   const projSection = text.match(/(?:PROJECTS|PERSONAL PROJECTS|KEY PROJECTS|NOTABLE PROJECTS)[:\s]*([\s\S]*?)(?=\n\s*(?:EDUCATION|EXPERIENCE|SKILLS|CERTIFICATION|$))/i);
   
   if (!projSection) return projects;
@@ -302,7 +351,6 @@ function extractLanguages(text: string): string[] {
   const languages: string[] = [];
   const commonLanguages = ['English', 'Spanish', 'French', 'German', 'Chinese', 'Mandarin', 'Hindi', 'Arabic', 'Portuguese', 'Japanese', 'Korean', 'Russian', 'Italian'];
   
-  // Look for languages section
   const langSection = text.match(/(?:LANGUAGES?|LANGUAGE SKILLS)[:\s]*([\s\S]*?)(?=\n\s*(?:EDUCATION|EXPERIENCE|SKILLS|PROJECTS|$))/i);
   const langText = langSection ? langSection[1] : text;
   
@@ -315,7 +363,7 @@ function extractLanguages(text: string): string[] {
   return languages;
 }
 
-// Extract summary/objective
+// Extract summary
 function extractSummary(text: string): string {
   const summarySection = text.match(/(?:SUMMARY|OBJECTIVE|PROFILE|ABOUT)[:\s]*([\s\S]*?)(?=\n\s*(?:EDUCATION|EXPERIENCE|SKILLS|PROJECTS|$))/i);
   
@@ -323,7 +371,6 @@ function extractSummary(text: string): string {
     return summarySection[1].trim().slice(0, 300);
   }
   
-  // Return first few sentences if no summary section
   const sentences = text.split(/[.!?]+/).filter(s => s.trim().length > 20);
   return sentences.slice(0, 2).join('. ').slice(0, 300);
 }
@@ -354,7 +401,6 @@ export async function parseResume(file: File): Promise<ParsedResume> {
     } else if (fileName.endsWith('.docx') || fileName.endsWith('.doc')) {
       rawText = await extractTextFromDOCX(file);
     } else {
-      // Try to read as text
       rawText = await file.text();
     }
   } catch (error) {
@@ -362,7 +408,7 @@ export async function parseResume(file: File): Promise<ParsedResume> {
     throw new Error('Failed to parse resume file. Please ensure it is a valid PDF or DOCX.');
   }
   
-  if (!rawText || rawText.trim().length < 50) {
+  if (!rawText || rawText.trim().length < 20) {
     throw new Error('Could not extract text from resume. The file may be image-based or corrupted.');
   }
   
@@ -429,7 +475,7 @@ export function matchResumeToJD(
     if (yearMatch) {
       experienceYears += parseInt(yearMatch[1]);
     } else if (exp.duration.includes('-') || exp.duration.toLowerCase().includes('to')) {
-      experienceYears += 2; // Estimate 2 years per job
+      experienceYears += 2;
     }
   }
   experienceYears = Math.max(parsedResume.experience.length, experienceYears);
