@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from "react";
-import type { JobDescription, Candidate, DashboardStats } from "@/types/fairhire";
+import type { JobDescription, Candidate, DashboardStats, InterviewVideo } from "@/types/fairhire";
 import { processCandidate, calculateStats, SAMPLE_CANDIDATES, type CandidateInput } from "@/lib/biasEngine";
 import type { ParsedResume, JDMatchResult } from "@/lib/resumeParser";
 
@@ -18,7 +18,8 @@ interface FairHireContextType {
     modalities: ("resume" | "video" | "audio")[], 
     parsedResume: ParsedResume, 
     jdMatchResult: JDMatchResult,
-    resumeFileName: string
+    resumeFileName: string,
+    interviewVideo?: InterviewVideo
   ) => Candidate | null;
   addSampleCandidates: () => void;
   clearCandidates: () => void;
@@ -162,7 +163,8 @@ export function FairHireProvider({ children }: { children: React.ReactNode }) {
     modalities: ("resume" | "video" | "audio")[], 
     parsedResume: ParsedResume, 
     jdMatchResult: JDMatchResult,
-    resumeFileName: string
+    resumeFileName: string,
+    interviewVideo?: InterviewVideo
   ): Candidate | null => {
     if (!activeJD) return null;
     
@@ -179,7 +181,8 @@ export function FairHireProvider({ children }: { children: React.ReactNode }) {
       modalities,
       parsedResume,
       jdMatchResult,
-      resumeFileName
+      resumeFileName,
+      interviewVideo
     };
     const newCandidate = processCandidate(candidateInput, activeJD, currentCandidates.length);
     
