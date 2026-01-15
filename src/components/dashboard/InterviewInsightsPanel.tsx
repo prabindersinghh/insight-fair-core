@@ -55,17 +55,46 @@ export function InterviewInsightsPanel({ candidate }: InterviewInsightsPanelProp
         {/* Interview Video Info */}
         {candidate.interviewVideo && (
           <div className="p-3 rounded-lg bg-muted/50">
-            <div className="flex items-center gap-2 mb-2">
+            <div className="flex items-center gap-2 mb-3">
               <Video className="h-4 w-4 text-primary" />
-              <span className="font-medium text-sm">Interview Video</span>
+              <span className="font-medium text-sm">Interview Video Analysis</span>
             </div>
-            <div className="grid grid-cols-2 gap-2 text-xs text-muted-foreground">
+            <div className="grid grid-cols-2 gap-2 text-xs text-muted-foreground mb-3">
               <span>File: {candidate.interviewVideo.fileName}</span>
               <span>Size: {(candidate.interviewVideo.fileSize / (1024 * 1024)).toFixed(2)} MB</span>
               {candidate.interviewVideo.duration && (
-                <span>Duration: {Math.floor(candidate.interviewVideo.duration / 60)}:{String(candidate.interviewVideo.duration % 60).padStart(2, '0')}</span>
+                <span>Duration: {Math.floor(candidate.interviewVideo.duration / 60)}:{String(Math.round(candidate.interviewVideo.duration % 60)).padStart(2, '0')}</span>
               )}
               <span>Format: {candidate.interviewVideo.format}</span>
+            </div>
+            
+            {/* Enhanced Video Analysis */}
+            <div className="grid grid-cols-2 gap-3 pt-3 border-t border-border">
+              <div className="p-2 rounded bg-background">
+                <div className="text-xs text-muted-foreground mb-1">Speech Clarity</div>
+                <Badge variant={
+                  candidate.interviewVideo.speechClarity === "high" ? "fair" : 
+                  candidate.interviewVideo.speechClarity === "medium" ? "caution" : "bias"
+                }>
+                  {candidate.interviewVideo.speechClarity?.toUpperCase() || "Analyzing..."}
+                </Badge>
+              </div>
+              <div className="p-2 rounded bg-background">
+                <div className="text-xs text-muted-foreground mb-1">Accent Detected</div>
+                <Badge variant="secondary">
+                  {candidate.interviewVideo.accentStrength?.charAt(0).toUpperCase() + candidate.interviewVideo.accentStrength?.slice(1) || "Neutral"}
+                </Badge>
+              </div>
+              <div className="p-2 rounded bg-background">
+                <div className="text-xs text-muted-foreground mb-1">Audio Track</div>
+                <Badge variant={candidate.interviewVideo.audioTrackDetected ? "fair" : "muted"}>
+                  {candidate.interviewVideo.audioTrackDetected ? "Present" : "Not Found"}
+                </Badge>
+              </div>
+              <div className="p-2 rounded bg-background">
+                <div className="text-xs text-muted-foreground mb-1">Confidence Score</div>
+                <span className="font-semibold">{candidate.interviewVideo.confidenceEstimation || 0}%</span>
+              </div>
             </div>
           </div>
         )}

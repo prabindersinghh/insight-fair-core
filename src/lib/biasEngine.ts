@@ -419,26 +419,46 @@ function generateCounterfactuals(
   return scenarios;
 }
 
-// Generate fairness summary
+// Generate realistic, varied fairness summaries
 function generateFairnessSummary(
   biasFactors: BiasFactor[],
   originalScore: number,
   adjustedScore: number,
   jd: JobDescription,
-  needsReview: boolean
+  needsReview: boolean,
+  candidateName: string
 ): string {
+  const hash = simpleHash(candidateName);
+  const correction = adjustedScore - originalScore;
+  
+  const needsReviewTemplates = [
+    `Conflicting signals detected between resume claims and interview responses for ${jd.roleTitle}. The candidate's demonstrated technical skills during the interview showed variance from their documented experience. We recommend human review to contextualize these discrepancies before finalizing the evaluation.`,
+    `Low confidence assessment for ${jd.roleTitle} position. Multiple cross-modal inconsistencies were detected, particularly in how verbal communication patterns were scored against written qualifications. Human oversight is essential to ensure fair treatment.`,
+    `Assessment confidence below automated threshold. Interview analysis detected potential scoring artifacts that may not reflect true competency for ${jd.roleTitle}. A human reviewer should validate the fairness correction before proceeding.`
+  ];
+  
+  const noBiasTemplates = [
+    `Evaluation for ${jd.roleTitle} completed with minimal bias indicators. The candidate's qualifications were assessed consistently across all modalities, and the original scoring appears fair and aligned with job requirements.`,
+    `Fair assessment confirmed for ${jd.roleTitle}. Cross-modal consistency checks passed with no significant bias patterns detected. The candidate's score reflects their demonstrated qualifications.`,
+    `Comprehensive bias analysis complete. No statistically significant bias factors were detected that would require score adjustment for this ${jd.roleTitle} evaluation.`
+  ];
+  
+  const correctionTemplates = [
+    `Although the candidate demonstrated strong ${jd.requiredSkills[0] || "technical"} proficiency during the interview, the initial score was negatively impacted by ${biasFactors[0]?.label.toLowerCase() || "identified bias patterns"}. This bias has been neutralized as it is not relevant to the ${jd.roleTitle} requirements. Adjustment: +${correction.toFixed(1)} points.`,
+    `Fairness analysis for ${jd.roleTitle} identified ${biasFactors.length} bias factor(s) requiring correction. Primary issue: ${biasFactors[0]?.label || "scoring inconsistency"}. The adjusted score of ${adjustedScore} now reflects skill-based evaluation rather than demographic proxies.`,
+    `Our causal fairness engine detected that the original ATS score of ${originalScore} was influenced by non-job-relevant factors including ${biasFactors.slice(0, 2).map(b => b.label.toLowerCase()).join(" and ")}. After applying counterfactual corrections, the fair score is ${adjustedScore}, representing a +${correction.toFixed(1)} point adjustment.`,
+    `The candidate's evaluation for ${jd.roleTitle} revealed bias patterns in the initial assessment. Specifically, ${biasFactors[0]?.explanation || "demographic proxy signals were detected"}. Our fairness correction has adjusted the score to reflect true competency alignment with job requirements.`
+  ];
+  
   if (needsReview) {
-    return `Low confidence assessment for ${jd.roleTitle}. Conflicting bias signals detected across modalities. Human review recommended before proceeding.`;
+    return needsReviewTemplates[hash % needsReviewTemplates.length];
   }
   
   if (biasFactors.length === 0) {
-    return `Candidate evaluation for ${jd.roleTitle} shows minimal bias indicators. Original assessment appears fair.`;
+    return noBiasTemplates[hash % noBiasTemplates.length];
   }
   
-  const correction = adjustedScore - originalScore;
-  const topBias = biasFactors.sort((a, b) => Math.abs(b.contribution) - Math.abs(a.contribution))[0];
-  
-  return `Fairness analysis for ${jd.roleTitle} identified ${biasFactors.length} bias factor(s). Primary correction: ${topBias.label} (${correction > 0 ? "+" : ""}${correction} points). Adjusted score reflects skill-based evaluation aligned with JD requirements.`;
+  return correctionTemplates[hash % correctionTemplates.length];
 }
 
 // Determine if candidate needs review (at least 1 in 5)
@@ -508,7 +528,7 @@ export function processCandidate(
   const modalityScores = generateModalityScores(input, jd, biasFactors);
   const explanations = generateExplanations(biasFactors, jd);
   const counterfactuals = generateCounterfactuals(input, originalScore, biasFactors);
-  const fairnessSummary = generateFairnessSummary(biasFactors, originalScore, adjustedScore, jd, needsReview);
+  const fairnessSummary = generateFairnessSummary(biasFactors, originalScore, adjustedScore, jd, needsReview, input.name);
   
   // Add warning explanation if needs review
   if (needsReview) {
@@ -542,6 +562,24 @@ export function processCandidate(
   // Generate cross-modal consistency analysis
   const crossModalConsistency = generateCrossModalConsistency(input, biasFactors, jd);
   
+  // Enhance interview video metadata with simulated analysis
+  let enhancedInterviewVideo = input.interviewVideo;
+  if (input.interviewVideo) {
+    const videoHash = simpleHash(input.name + (input.interviewVideo.fileName || "video"));
+    const clarityOptions: ("low" | "medium" | "high")[] = ["medium", "high", "high", "medium", "low"];
+    const accentOptions: ("neutral" | "regional" | "strong")[] = ["neutral", "neutral", "regional", "regional", "strong"];
+    const paceOptions: ("slow" | "moderate" | "fast")[] = ["moderate", "moderate", "slow", "fast", "moderate"];
+    
+    enhancedInterviewVideo = {
+      ...input.interviewVideo,
+      speechClarity: clarityOptions[videoHash % clarityOptions.length],
+      accentStrength: accentOptions[videoHash % accentOptions.length],
+      audioTrackDetected: true,
+      confidenceEstimation: 65 + (videoHash % 30),
+      speakingPace: paceOptions[videoHash % paceOptions.length]
+    };
+  }
+  
   return {
     id: simpleHash(input.name + jd.id + Date.now().toString()).toString(36),
     name: input.name,
@@ -561,7 +599,7 @@ export function processCandidate(
     parsedResume,
     jdMatchResult,
     resumeFileName: input.resumeFileName,
-    interviewVideo: input.interviewVideo,
+    interviewVideo: enhancedInterviewVideo,
     crossModalConsistency
   };
 }

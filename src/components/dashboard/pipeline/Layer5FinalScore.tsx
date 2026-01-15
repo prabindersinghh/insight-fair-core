@@ -15,12 +15,22 @@ interface Layer5FinalScoreProps {
 
 export function Layer5FinalScore({ candidate, isActive, isComplete, onComplete }: Layer5FinalScoreProps) {
   const [progress, setProgress] = useState(0);
-  const [stage, setStage] = useState<"idle" | "consolidating" | "explaining" | "complete">("idle");
+  const [stage, setStage] = useState<"idle" | "consolidating" | "scoring" | "explaining" | "reviewing" | "complete">("idle");
   const [isExpanded, setIsExpanded] = useState(true);
+  const [currentMessage, setCurrentMessage] = useState("");
   
   const adjustment = candidate.adjustedScore - candidate.originalScore;
   const isPositive = adjustment > 0;
   const needsReview = candidate.status === "review";
+
+  const processingMessages = [
+    "Consolidating modality scores...",
+    "Applying JD-conditioned weighting...",
+    "Computing unified fairness score...",
+    "Generating human-readable explanation...",
+    "Running governance review check...",
+    "Finalizing evaluation output..."
+  ];
 
   // Keep expanded when active
   useEffect(() => {
@@ -31,34 +41,52 @@ export function Layer5FinalScore({ candidate, isActive, isComplete, onComplete }
     if (isActive && !isComplete) {
       setStage("consolidating");
       setProgress(0);
+      setCurrentMessage(processingMessages[0]);
 
-      // Slower, more visible animation
+      let progressValue = 0;
       const interval = setInterval(() => {
-        setProgress(prev => {
-          if (prev < 50) return prev + 3;
-          if (prev < 100) return prev + 4;
-          return prev;
-        });
-      }, 80);
+        progressValue += Math.random() * 3 + 1.5;
+        if (progressValue > 100) progressValue = 100;
+        setProgress(Math.round(progressValue));
+      }, 100);
+
+      const timer0 = setTimeout(() => {
+        setCurrentMessage(processingMessages[1]);
+      }, 400);
 
       const timer1 = setTimeout(() => {
-        setStage("explaining");
-      }, 1200);
+        setStage("scoring");
+        setCurrentMessage(processingMessages[2]);
+      }, 800);
 
       const timer2 = setTimeout(() => {
-        setProgress(100);
-        setStage("complete");
-      }, 2200);
+        setStage("explaining");
+        setCurrentMessage(processingMessages[3]);
+      }, 1400);
 
       const timer3 = setTimeout(() => {
+        setStage("reviewing");
+        setCurrentMessage(processingMessages[4]);
+      }, 2000);
+
+      const timer4 = setTimeout(() => {
+        setProgress(100);
+        setStage("complete");
+        setCurrentMessage(processingMessages[5]);
+      }, 2600);
+
+      const timer5 = setTimeout(() => {
         onComplete();
-      }, 2800);
+      }, 3200);
 
       return () => {
         clearInterval(interval);
+        clearTimeout(timer0);
         clearTimeout(timer1);
         clearTimeout(timer2);
         clearTimeout(timer3);
+        clearTimeout(timer4);
+        clearTimeout(timer5);
       };
     } else if (isComplete) {
       setProgress(100);
@@ -107,11 +135,11 @@ export function Layer5FinalScore({ candidate, isActive, isComplete, onComplete }
           <CardContent className="space-y-4">
             {/* Progress indicator during processing */}
             {isActive && !isComplete && (
-              <div className="space-y-2">
+              <div className="space-y-3">
                 <div className="flex justify-between text-xs text-muted-foreground">
-                  <span>
-                    {stage === "consolidating" && "Consolidating scores..."}
-                    {stage === "explaining" && "Generating explanation..."}
+                  <span className="flex items-center gap-2">
+                    <Loader2 className="h-3 w-3 animate-spin" />
+                    {currentMessage}
                   </span>
                   <span>{progress}%</span>
                 </div>

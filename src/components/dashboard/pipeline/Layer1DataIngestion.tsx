@@ -16,9 +16,19 @@ interface Layer1DataIngestionProps {
 
 export function Layer1DataIngestion({ candidate, isActive, isComplete, onComplete }: Layer1DataIngestionProps) {
   const [progress, setProgress] = useState(0);
-  const [parsingStage, setParsingStage] = useState<"idle" | "extracting" | "parsing" | "complete">("idle");
+  const [parsingStage, setParsingStage] = useState<"idle" | "uploading" | "extracting" | "parsing" | "skills" | "validating" | "complete">("idle");
   const [isExpanded, setIsExpanded] = useState(true);
+  const [currentMessage, setCurrentMessage] = useState("");
   const parsedResume = candidate.parsedResume;
+
+  const processingMessages = [
+    "Uploading resume file...",
+    "Extracting raw text from document...",
+    "Parsing structured sections...",
+    "Extracting skills and keywords...",
+    "Validating extracted data...",
+    "Finalizing data ingestion..."
+  ];
 
   // Keep expanded when active
   useEffect(() => {
@@ -27,36 +37,57 @@ export function Layer1DataIngestion({ candidate, isActive, isComplete, onComplet
 
   useEffect(() => {
     if (isActive && !isComplete) {
-      setParsingStage("extracting");
+      setParsingStage("uploading");
       setProgress(0);
+      setCurrentMessage(processingMessages[0]);
 
-      // Slower, more visible animation
+      // More granular progress with varied timing
+      let progressValue = 0;
       const interval = setInterval(() => {
-        setProgress(prev => {
-          if (prev < 40) return prev + 2;
-          if (prev < 100) return prev + 3;
-          return prev;
-        });
-      }, 80);
+        progressValue += Math.random() * 3 + 1;
+        if (progressValue > 100) progressValue = 100;
+        setProgress(Math.round(progressValue));
+      }, 120);
 
+      // Stage transitions with descriptive messages
       const timer1 = setTimeout(() => {
-        setParsingStage("parsing");
-      }, 1200);
+        setParsingStage("extracting");
+        setCurrentMessage(processingMessages[1]);
+      }, 600);
 
       const timer2 = setTimeout(() => {
-        setParsingStage("complete");
-        setProgress(100);
-      }, 2400);
+        setParsingStage("parsing");
+        setCurrentMessage(processingMessages[2]);
+      }, 1200);
 
       const timer3 = setTimeout(() => {
-        onComplete();
+        setParsingStage("skills");
+        setCurrentMessage(processingMessages[3]);
+      }, 1800);
+
+      const timer4 = setTimeout(() => {
+        setParsingStage("validating");
+        setCurrentMessage(processingMessages[4]);
+      }, 2400);
+
+      const timer5 = setTimeout(() => {
+        setParsingStage("complete");
+        setCurrentMessage(processingMessages[5]);
+        setProgress(100);
       }, 3000);
+
+      const timer6 = setTimeout(() => {
+        onComplete();
+      }, 3600);
 
       return () => {
         clearInterval(interval);
         clearTimeout(timer1);
         clearTimeout(timer2);
         clearTimeout(timer3);
+        clearTimeout(timer4);
+        clearTimeout(timer5);
+        clearTimeout(timer6);
       };
     } else if (isComplete) {
       setProgress(100);
@@ -68,11 +99,20 @@ export function Layer1DataIngestion({ candidate, isActive, isComplete, onComplet
     if (isComplete || parsingStage === "complete") {
       return <Badge variant="fair" className="text-xs gap-1"><CheckCircle className="h-3 w-3" /> Complete</Badge>;
     }
+    if (parsingStage === "uploading") {
+      return <Badge variant="caution" className="text-xs gap-1"><Loader2 className="h-3 w-3 animate-spin" /> Uploading</Badge>;
+    }
     if (parsingStage === "extracting") {
-      return <Badge variant="caution" className="text-xs gap-1"><Loader2 className="h-3 w-3 animate-spin" /> Extracting Text</Badge>;
+      return <Badge variant="caution" className="text-xs gap-1"><Loader2 className="h-3 w-3 animate-spin" /> Extracting</Badge>;
     }
     if (parsingStage === "parsing") {
-      return <Badge variant="caution" className="text-xs gap-1"><Loader2 className="h-3 w-3 animate-spin" /> Parsing Content</Badge>;
+      return <Badge variant="caution" className="text-xs gap-1"><Loader2 className="h-3 w-3 animate-spin" /> Parsing</Badge>;
+    }
+    if (parsingStage === "skills") {
+      return <Badge variant="caution" className="text-xs gap-1"><Loader2 className="h-3 w-3 animate-spin" /> Skills</Badge>;
+    }
+    if (parsingStage === "validating") {
+      return <Badge variant="caution" className="text-xs gap-1"><Loader2 className="h-3 w-3 animate-spin" /> Validating</Badge>;
     }
     return <Badge variant="muted" className="text-xs">Pending</Badge>;
   };
@@ -109,9 +149,12 @@ export function Layer1DataIngestion({ candidate, isActive, isComplete, onComplet
           <CardContent className="space-y-4">
             {/* Progress indicator during processing */}
             {isActive && !isComplete && (
-              <div className="space-y-2">
+              <div className="space-y-3">
                 <div className="flex justify-between text-xs text-muted-foreground">
-                  <span>Processing...</span>
+                  <span className="flex items-center gap-2">
+                    <Loader2 className="h-3 w-3 animate-spin" />
+                    {currentMessage}
+                  </span>
                   <span>{progress}%</span>
                 </div>
                 <Progress value={progress} className="h-2" />

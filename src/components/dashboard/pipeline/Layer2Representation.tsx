@@ -16,8 +16,18 @@ interface Layer2RepresentationProps {
 
 export function Layer2Representation({ candidate, jobDescription, isActive, isComplete, onComplete }: Layer2RepresentationProps) {
   const [progress, setProgress] = useState(0);
-  const [stage, setStage] = useState<"idle" | "resume" | "jd" | "multimodal" | "complete">("idle");
+  const [stage, setStage] = useState<"idle" | "resume" | "jd" | "multimodal" | "fusion" | "complete">("idle");
   const [isExpanded, setIsExpanded] = useState(true);
+  const [currentMessage, setCurrentMessage] = useState("");
+
+  const processingMessages = [
+    "Loading transformer model weights...",
+    "Generating resume text embeddings...",
+    "Encoding job description requirements...",
+    "Processing multimodal features...",
+    "Fusing cross-modal representations...",
+    "Embeddings ready for analysis..."
+  ];
 
   // Keep expanded when active
   useEffect(() => {
@@ -28,40 +38,53 @@ export function Layer2Representation({ candidate, jobDescription, isActive, isCo
     if (isActive && !isComplete) {
       setStage("resume");
       setProgress(0);
+      setCurrentMessage(processingMessages[0]);
 
-      // Slower, more visible animation
+      // Varied progress
+      let progressValue = 0;
       const interval = setInterval(() => {
-        setProgress(prev => {
-          if (prev < 35) return prev + 2;
-          if (prev < 70) return prev + 2;
-          if (prev < 100) return prev + 3;
-          return prev;
-        });
-      }, 80);
+        progressValue += Math.random() * 3 + 1;
+        if (progressValue > 100) progressValue = 100;
+        setProgress(Math.round(progressValue));
+      }, 100);
+
+      const timer0 = setTimeout(() => {
+        setCurrentMessage(processingMessages[1]);
+      }, 400);
 
       const timer1 = setTimeout(() => {
         setStage("jd");
+        setCurrentMessage(processingMessages[2]);
       }, 1000);
 
       const timer2 = setTimeout(() => {
         setStage("multimodal");
+        setCurrentMessage(processingMessages[3]);
       }, 1800);
 
       const timer3 = setTimeout(() => {
-        setProgress(100);
-        setStage("complete");
-      }, 2400);
+        setStage("fusion");
+        setCurrentMessage(processingMessages[4]);
+      }, 2600);
 
       const timer4 = setTimeout(() => {
+        setProgress(100);
+        setStage("complete");
+        setCurrentMessage(processingMessages[5]);
+      }, 3200);
+
+      const timer5 = setTimeout(() => {
         onComplete();
-      }, 3000);
+      }, 3800);
 
       return () => {
         clearInterval(interval);
+        clearTimeout(timer0);
         clearTimeout(timer1);
         clearTimeout(timer2);
         clearTimeout(timer3);
         clearTimeout(timer4);
+        clearTimeout(timer5);
       };
     } else if (isComplete) {
       setProgress(100);
@@ -117,9 +140,12 @@ export function Layer2Representation({ candidate, jobDescription, isActive, isCo
           <CardContent className="space-y-4">
             {/* Progress indicator during processing */}
             {isActive && !isComplete && (
-              <div className="space-y-2">
+              <div className="space-y-3">
                 <div className="flex justify-between text-xs text-muted-foreground">
-                  <span>Generating embeddings...</span>
+                  <span className="flex items-center gap-2">
+                    <Loader2 className="h-3 w-3 animate-spin" />
+                    {currentMessage}
+                  </span>
                   <span>{progress}%</span>
                 </div>
                 <Progress value={progress} className="h-2" />
