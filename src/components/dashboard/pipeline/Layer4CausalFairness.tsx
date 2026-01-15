@@ -15,8 +15,9 @@ interface Layer4CausalFairnessProps {
 
 export function Layer4CausalFairness({ candidate, isActive, isComplete, onComplete }: Layer4CausalFairnessProps) {
   const [progress, setProgress] = useState(0);
-  const [stage, setStage] = useState<"idle" | "counterfactual" | "weights" | "adjusting" | "complete">("idle");
+  const [stage, setStage] = useState<"idle" | "counterfactual" | "intervention" | "weights" | "adjusting" | "calibrating" | "complete">("idle");
   const [isExpanded, setIsExpanded] = useState(true);
+  const [currentMessage, setCurrentMessage] = useState("");
   
   const adjustment = candidate.adjustedScore - candidate.originalScore;
   const hasAdjustment = Math.abs(adjustment) > 0.1;
@@ -24,6 +25,16 @@ export function Layer4CausalFairness({ candidate, isActive, isComplete, onComple
     type: bf.type,
     weight: bf.contribution
   }));
+
+  const processingMessages = [
+    "Initializing counterfactual simulation...",
+    "Running bias-neutral intervention tests...",
+    "Computing causal effect estimates...",
+    "Calculating bias contribution weights...",
+    "Applying fairness correction factors...",
+    "Calibrating final adjustment value...",
+    "Causal analysis complete."
+  ];
 
   // Keep expanded when active
   useEffect(() => {
@@ -34,40 +45,58 @@ export function Layer4CausalFairness({ candidate, isActive, isComplete, onComple
     if (isActive && !isComplete) {
       setStage("counterfactual");
       setProgress(0);
+      setCurrentMessage(processingMessages[0]);
 
-      // Slower, more visible animation
+      let progressValue = 0;
       const interval = setInterval(() => {
-        setProgress(prev => {
-          if (prev < 35) return prev + 2;
-          if (prev < 70) return prev + 2;
-          if (prev < 100) return prev + 3;
-          return prev;
-        });
-      }, 80);
+        progressValue += Math.random() * 2.5 + 1;
+        if (progressValue > 100) progressValue = 100;
+        setProgress(Math.round(progressValue));
+      }, 100);
+
+      const timer0 = setTimeout(() => {
+        setCurrentMessage(processingMessages[1]);
+      }, 400);
 
       const timer1 = setTimeout(() => {
-        setStage("weights");
-      }, 1000);
+        setStage("intervention");
+        setCurrentMessage(processingMessages[2]);
+      }, 900);
 
       const timer2 = setTimeout(() => {
-        setStage("adjusting");
-      }, 1800);
+        setStage("weights");
+        setCurrentMessage(processingMessages[3]);
+      }, 1500);
 
       const timer3 = setTimeout(() => {
-        setProgress(100);
-        setStage("complete");
-      }, 2400);
+        setStage("adjusting");
+        setCurrentMessage(processingMessages[4]);
+      }, 2100);
 
       const timer4 = setTimeout(() => {
+        setStage("calibrating");
+        setCurrentMessage(processingMessages[5]);
+      }, 2700);
+
+      const timer5 = setTimeout(() => {
+        setProgress(100);
+        setStage("complete");
+        setCurrentMessage(processingMessages[6]);
+      }, 3200);
+
+      const timer6 = setTimeout(() => {
         onComplete();
-      }, 3000);
+      }, 3800);
 
       return () => {
         clearInterval(interval);
+        clearTimeout(timer0);
         clearTimeout(timer1);
         clearTimeout(timer2);
         clearTimeout(timer3);
         clearTimeout(timer4);
+        clearTimeout(timer5);
+        clearTimeout(timer6);
       };
     } else if (isComplete) {
       setProgress(100);
@@ -130,12 +159,11 @@ export function Layer4CausalFairness({ candidate, isActive, isComplete, onComple
           <CardContent className="space-y-4">
             {/* Progress indicator during processing */}
             {isActive && !isComplete && (
-              <div className="space-y-2">
+              <div className="space-y-3">
                 <div className="flex justify-between text-xs text-muted-foreground">
-                  <span>
-                    {stage === "counterfactual" && "Running counterfactual simulation..."}
-                    {stage === "weights" && "Computing bias contribution weights..."}
-                    {stage === "adjusting" && "Calculating fairness adjustment..."}
+                  <span className="flex items-center gap-2">
+                    <Loader2 className="h-3 w-3 animate-spin" />
+                    {currentMessage}
                   </span>
                   <span>{progress}%</span>
                 </div>

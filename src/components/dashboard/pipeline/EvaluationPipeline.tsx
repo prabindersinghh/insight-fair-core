@@ -10,9 +10,10 @@ import { Layer3BiasAnalysis } from "./Layer3BiasAnalysis";
 import { Layer4CausalFairness } from "./Layer4CausalFairness";
 import { Layer5FinalScore } from "./Layer5FinalScore";
 import { InterviewInsightsPanel } from "../InterviewInsightsPanel";
+import { toast } from "sonner";
 import { 
   Database, Brain, ShieldAlert, Scale, Sparkles, 
-  ArrowDown, CheckCircle, Play, RotateCcw 
+  ArrowDown, CheckCircle, Play, RotateCcw, AlertTriangle
 } from "lucide-react";
 
 interface EvaluationPipelineProps {
@@ -44,8 +45,11 @@ export function EvaluationPipeline({ candidate, jobDescription }: EvaluationPipe
     } else {
       setPipelineComplete(true);
       setIsRunning(false);
+      toast.success("Analysis Complete", {
+        description: `Fairness evaluation for ${candidate.name} has been processed successfully.`,
+      });
     }
-  }, []);
+  }, [candidate.name]);
 
   const handleRestart = () => {
     setCompletedSteps(new Set());
@@ -242,6 +246,17 @@ export function EvaluationPipeline({ candidate, jobDescription }: EvaluationPipe
           </CardContent>
         </Card>
       )}
+
+      {/* Ethical Governance Disclaimer */}
+      <div className="p-3 rounded-lg bg-caution/10 border border-caution/30">
+        <div className="flex items-start gap-2">
+          <AlertTriangle className="h-4 w-4 text-caution mt-0.5 shrink-0" />
+          <p className="text-xs text-muted-foreground">
+            <strong className="text-caution">FairHire360 Governance Notice:</strong> This system is a fairness governance layer, not a hiring decision engine. 
+            Final hiring decisions require human review. Scores represent bias-corrected assessments and should be validated by qualified personnel.
+          </p>
+        </div>
+      </div>
     </div>
   );
 }

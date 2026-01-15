@@ -15,11 +15,22 @@ interface Layer3BiasAnalysisProps {
 
 export function Layer3BiasAnalysis({ candidate, isActive, isComplete, onComplete }: Layer3BiasAnalysisProps) {
   const [progress, setProgress] = useState(0);
-  const [stage, setStage] = useState<"idle" | "resume_interview" | "language" | "proxy" | "complete">("idle");
+  const [stage, setStage] = useState<"idle" | "resume_interview" | "language" | "accent" | "visual" | "proxy" | "complete">("idle");
   const [isExpanded, setIsExpanded] = useState(true);
+  const [currentMessage, setCurrentMessage] = useState("");
   const biasFactors = candidate.biasFactors;
   const hasBias = biasFactors.length > 0;
   const hasInterview = candidate.modalities.includes("video") || candidate.modalities.includes("audio");
+
+  const processingMessages = [
+    "Comparing resume score vs interview score...",
+    "Detecting resume-interview disparity patterns...",
+    "Analyzing language proficiency signals...",
+    "Detecting accent and fluency correlation...",
+    "Scanning for visual appearance proxies...",
+    "Checking name-based demographic patterns...",
+    "Compiling bias attribution report..."
+  ];
 
   // Keep expanded when active
   useEffect(() => {
@@ -30,40 +41,58 @@ export function Layer3BiasAnalysis({ candidate, isActive, isComplete, onComplete
     if (isActive && !isComplete) {
       setStage("resume_interview");
       setProgress(0);
+      setCurrentMessage(processingMessages[0]);
 
-      // Slower, more visible animation
+      let progressValue = 0;
       const interval = setInterval(() => {
-        setProgress(prev => {
-          if (prev < 35) return prev + 2;
-          if (prev < 70) return prev + 2;
-          if (prev < 100) return prev + 3;
-          return prev;
-        });
-      }, 80);
+        progressValue += Math.random() * 2.5 + 1;
+        if (progressValue > 100) progressValue = 100;
+        setProgress(Math.round(progressValue));
+      }, 110);
+
+      const timer0 = setTimeout(() => {
+        setCurrentMessage(processingMessages[1]);
+      }, 500);
 
       const timer1 = setTimeout(() => {
         setStage("language");
-      }, 1000);
+        setCurrentMessage(processingMessages[2]);
+      }, 900);
 
       const timer2 = setTimeout(() => {
-        setStage("proxy");
-      }, 1800);
+        setStage("accent");
+        setCurrentMessage(processingMessages[3]);
+      }, 1500);
 
       const timer3 = setTimeout(() => {
-        setProgress(100);
-        setStage("complete");
-      }, 2400);
+        setStage("visual");
+        setCurrentMessage(processingMessages[4]);
+      }, 2100);
 
       const timer4 = setTimeout(() => {
+        setStage("proxy");
+        setCurrentMessage(processingMessages[5]);
+      }, 2700);
+
+      const timer5 = setTimeout(() => {
+        setProgress(100);
+        setStage("complete");
+        setCurrentMessage(processingMessages[6]);
+      }, 3300);
+
+      const timer6 = setTimeout(() => {
         onComplete();
-      }, 3000);
+      }, 3900);
 
       return () => {
         clearInterval(interval);
+        clearTimeout(timer0);
         clearTimeout(timer1);
         clearTimeout(timer2);
         clearTimeout(timer3);
         clearTimeout(timer4);
+        clearTimeout(timer5);
+        clearTimeout(timer6);
       };
     } else if (isComplete) {
       setProgress(100);
@@ -132,12 +161,11 @@ export function Layer3BiasAnalysis({ candidate, isActive, isComplete, onComplete
           <CardContent className="space-y-4">
             {/* Progress indicator during processing */}
             {isActive && !isComplete && (
-              <div className="space-y-2">
+              <div className="space-y-3">
                 <div className="flex justify-between text-xs text-muted-foreground">
-                  <span>
-                    {stage === "resume_interview" && "Checking score disparity..."}
-                    {stage === "language" && "Analyzing language sensitivity..."}
-                    {stage === "proxy" && "Detecting proxy correlations..."}
+                  <span className="flex items-center gap-2">
+                    <Loader2 className="h-3 w-3 animate-spin" />
+                    {currentMessage}
                   </span>
                   <span>{progress}%</span>
                 </div>

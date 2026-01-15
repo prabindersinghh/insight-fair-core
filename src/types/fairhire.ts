@@ -20,6 +20,12 @@ export interface InterviewVideo {
   duration?: number; // in seconds
   uploadedAt: Date;
   format: string;
+  // Enhanced simulated analysis
+  speechClarity?: "low" | "medium" | "high";
+  accentStrength?: "neutral" | "regional" | "strong";
+  audioTrackDetected?: boolean;
+  confidenceEstimation?: number; // 0-100
+  speakingPace?: "slow" | "moderate" | "fast";
 }
 
 // Cross-modal consistency result
