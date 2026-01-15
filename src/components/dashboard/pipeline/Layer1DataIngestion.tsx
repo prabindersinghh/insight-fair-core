@@ -165,7 +165,7 @@ export function Layer1DataIngestion({ candidate, isActive, isComplete, onComplet
                       <Database className="h-4 w-4 text-muted-foreground" />
                       <span className="text-xs text-muted-foreground">Parse Confidence</span>
                     </div>
-                    <p className="text-xl font-bold">{Math.round(parsedResume.parseConfidence * 100)}%</p>
+                    <p className="text-xl font-bold">{Math.min(100, Math.max(0, Math.round(parsedResume.parseConfidence * 100)))}%</p>
                   </div>
                 </div>
 
