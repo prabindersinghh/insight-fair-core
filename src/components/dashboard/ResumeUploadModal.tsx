@@ -6,10 +6,11 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Upload, FileText, Video, Mic, CheckCircle, AlertCircle, Loader2, GraduationCap, Briefcase, Code } from "lucide-react";
+import { Upload, FileText, Video, Mic, CheckCircle, AlertCircle, Loader2, GraduationCap, Briefcase, Code, X, Play } from "lucide-react";
 import { useFairHire } from "@/contexts/FairHireContext";
 import { parseResume, matchResumeToJD, type ParsedResume } from "@/lib/resumeParser";
 import { toast } from "sonner";
+import type { InterviewVideo } from "@/types/fairhire";
 
 interface ResumeUploadModalProps {
   trigger?: React.ReactNode;
@@ -29,6 +30,11 @@ export function ResumeUploadModal({ trigger, open, onOpenChange }: ResumeUploadM
   const [hasVideo, setHasVideo] = useState(false);
   const [hasAudio, setHasAudio] = useState(false);
   const [parseError, setParseError] = useState<string | null>(null);
+  
+  // NEW: Video interview state
+  const videoInputRef = useRef<HTMLInputElement>(null);
+  const [videoFile, setVideoFile] = useState<File | null>(null);
+  const [interviewVideoMeta, setInterviewVideoMeta] = useState<InterviewVideo | null>(null);
 
   const controlledOpen = open !== undefined ? open : isOpen;
   const controlledOnOpenChange = onOpenChange || setIsOpen;
@@ -45,6 +51,53 @@ export function ResumeUploadModal({ trigger, open, onOpenChange }: ResumeUploadM
     setHasVideo(false);
     setHasAudio(false);
     setParseError(null);
+    setVideoFile(null);
+    setInterviewVideoMeta(null);
+  };
+
+  // NEW: Handle video file selection
+  const handleVideoSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const selectedFile = e.target.files?.[0];
+    if (!selectedFile) return;
+
+    const validTypes = ['video/mp4', 'video/webm', 'video/quicktime'];
+    if (!validTypes.includes(selectedFile.type) && !selectedFile.name.match(/\.(mp4|webm|mov)$/i)) {
+      toast.error("Please upload an MP4, WebM, or MOV file");
+      return;
+    }
+
+    setVideoFile(selectedFile);
+    setHasVideo(true);
+    
+    // Create video metadata
+    const meta: InterviewVideo = {
+      fileName: selectedFile.name,
+      fileSize: selectedFile.size,
+      uploadedAt: new Date(),
+      format: selectedFile.type || 'video/mp4'
+    };
+    
+    // Try to get video duration
+    const video = document.createElement('video');
+    video.preload = 'metadata';
+    video.onloadedmetadata = () => {
+      meta.duration = Math.round(video.duration);
+      setInterviewVideoMeta(meta);
+      window.URL.revokeObjectURL(video.src);
+    };
+    video.src = URL.createObjectURL(selectedFile);
+    setInterviewVideoMeta(meta);
+    
+    toast.success("Interview video attached", {
+      description: `${selectedFile.name} (${(selectedFile.size / (1024 * 1024)).toFixed(2)} MB)`
+    });
+  };
+
+  const removeVideoFile = () => {
+    setVideoFile(null);
+    setInterviewVideoMeta(null);
+    setHasVideo(false);
+    if (videoInputRef.current) videoInputRef.current.value = '';
   };
 
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -99,7 +152,8 @@ export function ResumeUploadModal({ trigger, open, onOpenChange }: ResumeUploadM
       modalities,
       parsedResume,
       jdMatchResult,
-      file?.name || "resume.pdf"
+      file?.name || "resume.pdf",
+      interviewVideoMeta || undefined
     );
 
     if (candidate) {
@@ -268,18 +322,60 @@ export function ResumeUploadModal({ trigger, open, onOpenChange }: ResumeUploadM
               </Card>
             )}
 
-            {/* Optional modalities */}
+            {/* Video Upload Section */}
+            {parsedResume && (
+              <div className="space-y-2">
+                <Label className="flex items-center gap-2">
+                  <Video className="h-4 w-4" />
+                  Interview Video (Optional)
+                </Label>
+                {videoFile ? (
+                  <Card variant="elevated" className="border-primary/30">
+                    <CardContent className="p-3 flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <div className="p-2 rounded bg-primary/10">
+                          <Play className="h-4 w-4 text-primary" />
+                        </div>
+                        <div>
+                          <p className="text-sm font-medium">{videoFile.name}</p>
+                          <p className="text-xs text-muted-foreground">
+                            {(videoFile.size / (1024 * 1024)).toFixed(2)} MB
+                            {interviewVideoMeta?.duration && ` • ${Math.floor(interviewVideoMeta.duration / 60)}:${String(interviewVideoMeta.duration % 60).padStart(2, '0')}`}
+                          </p>
+                        </div>
+                      </div>
+                      <Button variant="ghost" size="sm" onClick={removeVideoFile}>
+                        <X className="h-4 w-4" />
+                      </Button>
+                    </CardContent>
+                  </Card>
+                ) : (
+                  <div 
+                    onClick={() => videoInputRef.current?.click()}
+                    className="border-2 border-dashed rounded-lg p-4 text-center cursor-pointer transition-colors hover:border-primary/50"
+                  >
+                    <input
+                      ref={videoInputRef}
+                      type="file"
+                      accept=".mp4,.webm,.mov,video/mp4,video/webm,video/quicktime"
+                      onChange={handleVideoSelect}
+                      className="hidden"
+                    />
+                    <Video className="h-8 w-8 mx-auto text-muted-foreground mb-2" />
+                    <p className="text-sm text-muted-foreground">Click to upload interview video (MP4, WebM, MOV)</p>
+                    <p className="text-xs text-muted-foreground mt-1">Enables cross-modal bias detection</p>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Audio checkbox */}
             {parsedResume && (
               <div className="flex gap-4">
                 <label className="flex items-center gap-2 cursor-pointer">
-                  <Checkbox checked={hasVideo} onCheckedChange={(c) => setHasVideo(!!c)} />
-                  <Video className="h-4 w-4" />
-                  <span className="text-sm">Video Interview</span>
-                </label>
-                <label className="flex items-center gap-2 cursor-pointer">
                   <Checkbox checked={hasAudio} onCheckedChange={(c) => setHasAudio(!!c)} />
                   <Mic className="h-4 w-4" />
-                  <span className="text-sm">Audio Interview</span>
+                  <span className="text-sm">Audio Interview Available</span>
                 </label>
               </div>
             )}

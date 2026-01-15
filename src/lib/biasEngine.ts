@@ -1,7 +1,11 @@
 // Deterministic Bias Simulation Engine for FairHire360
 // Rule-based, reproducible bias detection for hackathon demo
 
-import type { JobDescription, Candidate, BiasFactor, BiasType, ModalityScore, CandidateExplanation, CounterfactualScenario } from "@/types/fairhire";
+import type { 
+  JobDescription, Candidate, BiasFactor, BiasType, ModalityScore, 
+  CandidateExplanation, CounterfactualScenario, InterviewVideo, 
+  CrossModalConsistency, BiasSource 
+} from "@/types/fairhire";
 import type { ParsedResume, JDMatchResult } from "./resumeParser";
 
 // Deterministic hash for consistent results
@@ -32,6 +36,91 @@ export interface CandidateInput {
   parsedResume?: ParsedResume;
   jdMatchResult?: JDMatchResult;
   resumeFileName?: string;
+  interviewVideo?: InterviewVideo;
+}
+
+// Generate cross-modal consistency analysis
+function generateCrossModalConsistency(
+  candidate: CandidateInput,
+  biasFactors: BiasFactor[],
+  jd: JobDescription
+): CrossModalConsistency {
+  const hasVideo = candidate.modalities.includes("video");
+  const hasAudio = candidate.modalities.includes("audio");
+  const hasResume = candidate.modalities.includes("resume");
+  const hash = simpleHash(candidate.name + jd.id);
+  
+  // Determine primary bias source
+  let biasSource: BiasSource = "text";
+  const videoBias = biasFactors.filter(bf => 
+    ["appearance_bias", "background_environment"].includes(bf.type)
+  );
+  const audioBias = biasFactors.filter(bf => 
+    ["accent_penalty", "language_fluency"].includes(bf.type)
+  );
+  const textBias = biasFactors.filter(bf => 
+    ["name_proxy", "gender_language", "institution_bias"].includes(bf.type)
+  );
+  
+  if (videoBias.length > 0 && audioBias.length > 0) {
+    biasSource = "multiple";
+  } else if (videoBias.length > audioBias.length && videoBias.length > textBias.length) {
+    biasSource = "video";
+  } else if (audioBias.length > textBias.length) {
+    biasSource = "audio";
+  }
+  
+  // Check for specific bias types
+  const accentPenaltyDetected = biasFactors.some(bf => bf.type === "accent_penalty");
+  const fluencyBiasDetected = biasFactors.some(bf => bf.type === "language_fluency");
+  const visualBiasDetected = biasFactors.some(bf => 
+    bf.type === "appearance_bias" || bf.type === "background_environment"
+  );
+  
+  // Skill match level based on JD match
+  let skillMatchLevel: "low" | "medium" | "high" = "medium";
+  if (candidate.jdMatchResult) {
+    const matchPercent = (candidate.jdMatchResult.matchedSkills.length / 
+      (candidate.jdMatchResult.matchedSkills.length + candidate.jdMatchResult.missingSkills.length)) * 100;
+    skillMatchLevel = matchPercent >= 70 ? "high" : matchPercent >= 40 ? "medium" : "low";
+  } else {
+    skillMatchLevel = hash % 3 === 0 ? "high" : hash % 3 === 1 ? "medium" : "low";
+  }
+  
+  // Calculate resume vs interview score disparity (simulated)
+  const resumeVsInterviewScore = hasVideo || hasAudio 
+    ? 65 + (hash % 30) 
+    : 80 + (hash % 15); // Higher consistency when only resume
+  
+  // Overall consistency score
+  const biasCount = biasFactors.length;
+  const consistencyScore = Math.max(40, Math.min(95, 85 - (biasCount * 8) + (hash % 10)));
+  
+  // Generate flags
+  const flags: string[] = [];
+  if (accentPenaltyDetected && !hasAudio) {
+    flags.push("Accent penalty without audio modality");
+  }
+  if (visualBiasDetected && !hasVideo) {
+    flags.push("Visual bias without video modality");
+  }
+  if (resumeVsInterviewScore < 70) {
+    flags.push("Resume-Interview score disparity");
+  }
+  if (skillMatchLevel === "low" && biasFactors.length > 2) {
+    flags.push("Low skill match with multiple bias signals");
+  }
+  
+  return {
+    resumeVsInterviewScore,
+    skillMatchLevel,
+    accentPenaltyDetected,
+    fluencyBiasDetected,
+    visualBiasDetected,
+    biasSource,
+    consistencyScore,
+    flags
+  };
 }
 
 // Generate deterministic base score
@@ -450,6 +539,9 @@ export function processCandidate(
     }
   }
   
+  // Generate cross-modal consistency analysis
+  const crossModalConsistency = generateCrossModalConsistency(input, biasFactors, jd);
+  
   return {
     id: simpleHash(input.name + jd.id + Date.now().toString()).toString(36),
     name: input.name,
@@ -468,7 +560,9 @@ export function processCandidate(
     processedAt: new Date(),
     parsedResume,
     jdMatchResult,
-    resumeFileName: input.resumeFileName
+    resumeFileName: input.resumeFileName,
+    interviewVideo: input.interviewVideo,
+    crossModalConsistency
   };
 }
 

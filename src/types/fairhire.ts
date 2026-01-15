@@ -10,6 +10,30 @@ export interface JobDescription {
   createdAt: Date;
 }
 
+// Cross-modal bias source tracking
+export type BiasSource = "text" | "audio" | "video" | "multiple";
+
+// Interview video metadata
+export interface InterviewVideo {
+  fileName: string;
+  fileSize: number;
+  duration?: number; // in seconds
+  uploadedAt: Date;
+  format: string;
+}
+
+// Cross-modal consistency result
+export interface CrossModalConsistency {
+  resumeVsInterviewScore: number; // 0-100
+  skillMatchLevel: "low" | "medium" | "high";
+  accentPenaltyDetected: boolean;
+  fluencyBiasDetected: boolean;
+  visualBiasDetected: boolean;
+  biasSource: BiasSource;
+  consistencyScore: number; // 0-100
+  flags: string[];
+}
+
 export type BiasType = 
   | "name_proxy"
   | "accent_penalty"
@@ -92,6 +116,10 @@ export interface Candidate {
     improvementAreas: string[];
   };
   resumeFileName?: string;
+  // NEW: Interview video data
+  interviewVideo?: InterviewVideo;
+  // NEW: Cross-modal consistency analysis
+  crossModalConsistency?: CrossModalConsistency;
 }
 
 export interface DashboardStats {

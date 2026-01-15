@@ -9,6 +9,7 @@ import { Layer2Representation } from "./Layer2Representation";
 import { Layer3BiasAnalysis } from "./Layer3BiasAnalysis";
 import { Layer4CausalFairness } from "./Layer4CausalFairness";
 import { Layer5FinalScore } from "./Layer5FinalScore";
+import { InterviewInsightsPanel } from "../InterviewInsightsPanel";
 import { 
   Database, Brain, ShieldAlert, Scale, Sparkles, 
   ArrowDown, CheckCircle, Play, RotateCcw 
@@ -217,6 +218,11 @@ export function EvaluationPipeline({ candidate, jobDescription }: EvaluationPipe
           onComplete={() => handleStepComplete(5)}
         />
       </div>
+
+      {/* Interview Insights Panel - shown when pipeline complete */}
+      {pipelineComplete && (
+        <InterviewInsightsPanel candidate={candidate} />
+      )}
 
       {/* Pipeline complete summary */}
       {pipelineComplete && (
