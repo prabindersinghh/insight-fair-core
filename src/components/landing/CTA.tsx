@@ -19,7 +19,8 @@ export function CTA() {
           </div>
 
           <h2 className="font-display text-3xl font-bold sm:text-4xl lg:text-5xl mb-6">
-            Ready to Eliminate Bias from Your Hiring Process?
+            Hiring should be fair by design.{" "}
+            <span className="opacity-80">Not by chance.</span>
           </h2>
 
           <p className="text-lg text-primary-foreground/80 mb-10 max-w-xl mx-auto">
@@ -28,23 +29,23 @@ export function CTA() {
           </p>
 
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
+            <Button 
+              size="xl" 
+              variant="outline"
+              className="border-primary-foreground/30 text-primary-foreground hover:bg-primary-foreground/10 hover:text-primary-foreground"
+            >
+              Request Demo
+            </Button>
             <Link to="/dashboard">
               <Button 
                 size="xl" 
                 className="bg-primary-foreground text-primary hover:bg-primary-foreground/90 shadow-floating group"
               >
                 <Sparkles className="h-5 w-5" />
-                Try the Demo
+                Explore Platform
                 <ArrowRight className="h-5 w-5 transition-transform group-hover:translate-x-1" />
               </Button>
             </Link>
-            <Button 
-              size="xl" 
-              variant="outline"
-              className="border-primary-foreground/30 text-primary-foreground hover:bg-primary-foreground/10 hover:text-primary-foreground"
-            >
-              Schedule a Demo
-            </Button>
           </div>
         </div>
       </div>
