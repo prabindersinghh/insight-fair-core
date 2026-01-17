@@ -24,11 +24,9 @@ export function Hero() {
           </div>
 
           {/* Headline */}
-          <h1 className="mt-8 font-display tracking-tight animate-slide-up flex flex-col items-center gap-2">
-            <span className="text-4xl sm:text-5xl lg:text-7xl font-extrabold text-primary leading-tight">
-              Bias-Free Recruitment
-            </span>
-            <span className="text-3xl sm:text-4xl lg:text-6xl font-bold text-gradient-hero leading-tight">
+          <h1 className="mt-8 font-display text-4xl font-bold tracking-tight sm:text-5xl lg:text-7xl animate-slide-up">
+            Bias-Free Recruitment{" "}
+            <span className="text-gradient-hero">
               Powered by AI
             </span>
           </h1>
