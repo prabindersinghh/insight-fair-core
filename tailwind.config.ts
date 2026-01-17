@@ -15,7 +15,7 @@ export default {
   	extend: {
   		fontFamily: {
   			sans: [
-  				'Plus Jakarta Sans',
+  				'Inter',
   				'ui-sans-serif',
   				'system-ui',
   				'sans-serif',

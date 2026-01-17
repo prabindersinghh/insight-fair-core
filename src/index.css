@@ -3,6 +3,7 @@
 @import url("https://fonts.googleapis.com/css2?family=Lora:wght@400;500;600;700&display=swap");
 @import url("https://fonts.googleapis.com/css2?family=Space+Mono:ital,wght@0,400;0,700;1,400;1,700&display=swap");
 @import url("https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=Inter&display=swap");
 
 @tailwind base;
 @tailwind components;
@@ -86,7 +87,7 @@
     --sidebar-border: 210 20% 88%;
     --sidebar-ring: 175 60% 35%;
     --sidebar: 0 0% 98%;
-    --font-sans: "Plus Jakarta Sans", ui-sans-serif, system-ui, sans-serif, Apple Color Emoji, Segoe UI Emoji, Segoe UI Symbol, Noto Color Emoji;
+    --font-sans: Inter, ui-sans-serif, system-ui, sans-serif, Apple Color Emoji, Segoe UI Emoji, Segoe UI Symbol, Noto Color Emoji;
     --font-serif: ui-serif, Georgia, Cambria, 'Times New Roman', Times, serif;
     --font-mono: 'Space Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace;
     --shadow-2xs: 1px 1px 0px 0px #000000;
@@ -164,7 +165,7 @@
     --shadow-lg: 12px 12px 0px 0px #ffffff;
     --shadow-xl: 16px 16px 0px 0px #ffffff;
     --shadow-2xl: 24px 24px 0px 0px #ffffff;
-    --font-sans: "Plus Jakarta Sans", ui-sans-serif, system-ui, sans-serif, Apple Color Emoji, Segoe UI Emoji, Segoe UI Symbol, Noto Color Emoji;
+    --font-sans: Inter, ui-sans-serif, system-ui, sans-serif, Apple Color Emoji, Segoe UI Emoji, Segoe UI Symbol, Noto Color Emoji;
   }
 }
 
