@@ -25,10 +25,10 @@ export function Layer3BiasAnalysis({ candidate, isActive, isComplete, onComplete
   const processingMessages = [
     "Comparing resume score vs interview score...",
     "Detecting resume-interview disparity patterns...",
-    "Analyzing language proficiency signals...",
-    "Detecting accent and fluency correlation...",
-    "Scanning for visual appearance proxies...",
-    "Checking name-based demographic patterns...",
+    "Analyzing speech disfluency and accent variance...",
+    "Detecting eye-contact and flat affect patterns...",
+    "Scanning for grammar irregularities and rural education signals...",
+    "Running inclusion-aware bias signal detection...",
     "Compiling bias attribution report..."
   ];
 
@@ -147,6 +147,9 @@ export function Layer3BiasAnalysis({ candidate, isActive, isComplete, onComplete
                     Layer 3
                   </p>
                   <CardTitle className="text-base">Cross-Modal Bias Consistency & Attribution</CardTitle>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    • Inclusion-Aware Bias Signal Detection
+                  </p>
                 </div>
               </div>
               <div className="flex items-center gap-2">
@@ -217,6 +220,22 @@ export function Layer3BiasAnalysis({ candidate, isActive, isComplete, onComplete
                   <div className="flex-1">
                     <p className="text-sm font-medium">Name/Appearance Proxy Correlation</p>
                     <p className="text-xs text-muted-foreground">Detecting protected attribute proxies</p>
+                  </div>
+                  {stage === "complete" && (
+                    <CheckCircle className="h-4 w-4 text-fair" />
+                  )}
+                </div>
+              </div>
+
+              {/* Inclusion-Aware Bias Detection Sub-module */}
+              <div className={`p-3 rounded-lg border ${stage === "complete" ? "bg-primary/5 border-primary/30" : "bg-muted/20 border-border/50"}`}>
+                <div className="flex items-center gap-3">
+                  <ShieldCheck className="h-4 w-4 text-primary" />
+                  <div className="flex-1">
+                    <p className="text-sm font-medium">Inclusion-Aware Bias Signal Detection</p>
+                    <p className="text-xs text-muted-foreground">
+                      Speech disfluency, accent variance, eye-contact, flat affect, grammar, rural education
+                    </p>
                   </div>
                   {stage === "complete" && (
                     <CheckCircle className="h-4 w-4 text-fair" />

@@ -1,7 +1,8 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { AlertTriangle, ShieldCheck, Info, AlertCircle } from "lucide-react";
+import { AlertTriangle, ShieldCheck, Info, AlertCircle, HelpCircle } from "lucide-react";
 import { BiasFactor } from "@/types/fairhire";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
 interface BiasSignalsPanelProps {
   biasFactors: BiasFactor[];
@@ -116,6 +117,28 @@ export function BiasSignalsPanel({ biasFactors, candidateName }: BiasSignalsPane
             })}
           </div>
         )}
+
+        {/* Detection Layer Label */}
+        <div className="p-3 rounded-lg bg-primary/5 border border-primary/20">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-medium text-primary">Detection Layer:</span>
+              <span className="text-xs text-foreground">Cross-Modal + Inclusion-Aware Reasoning Engine</span>
+            </div>
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <HelpCircle className="h-4 w-4 text-muted-foreground cursor-help" />
+                </TooltipTrigger>
+                <TooltipContent side="left" className="max-w-xs">
+                  <p className="text-xs">
+                    This layer identifies behavioral and communication patterns that commonly lead to unfair penalties for neurodivergent, disabled, or rural candidates.
+                  </p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          </div>
+        </div>
 
         <div className="pt-3 border-t border-border">
           <p className="text-xs text-muted-foreground italic">
