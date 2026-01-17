@@ -1,7 +1,17 @@
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { ArrowRight, Shield, Sparkles, Users } from "lucide-react";
+import { ArrowRight, Sparkles } from "lucide-react";
 import { Link } from "react-router-dom";
+
+const featureStrip = [
+  "Text",
+  "Resume",
+  "Audio",
+  "Video",
+  "Language",
+  "Behavior",
+  "Causal Fairness Graphs",
+];
 
 export function Hero() {
   return (
@@ -19,23 +29,38 @@ export function Hero() {
           <div className="inline-flex animate-slide-down">
             <Badge variant="secondary" className="gap-2 px-4 py-1.5 text-sm">
               <Sparkles className="h-3.5 w-3.5 text-primary" />
-              AI for Inclusion Hackathon 2026
+              AI for Inclusion Hackathon 2026 · SabkaAI Track
             </Badge>
           </div>
 
           {/* Headline */}
           <h1 className="mt-8 font-display text-4xl font-bold tracking-tight sm:text-5xl lg:text-7xl animate-slide-up">
-            Bias-Free Recruitment{" "}
-            <span className="text-gradient-hero">
-              Powered by AI
-            </span>
+            FairHire{" "}
+            <span className="text-gradient-hero">360</span>
           </h1>
 
           {/* Subheadline */}
-          <p className="mt-6 text-lg text-muted-foreground sm:text-xl max-w-2xl mx-auto animate-slide-up" style={{ animationDelay: "0.1s" }}>
+          <h2 className="mt-4 font-display text-xl sm:text-2xl lg:text-3xl text-muted-foreground animate-slide-up" style={{ animationDelay: "0.05s" }}>
+            Bias-Free Recruitment, Powered by AI
+          </h2>
+
+          {/* Description */}
+          <p className="mt-6 text-lg text-muted-foreground sm:text-xl max-w-3xl mx-auto animate-slide-up" style={{ animationDelay: "0.1s" }}>
             FairHire360 detects, explains, and corrects hidden bias in recruitment — 
-            ensuring candidates are evaluated on skill alone, not identity.
+            ensuring candidates are evaluated on skill alone, not identity, accent, background, or mental health conditions.
           </p>
+
+          {/* Feature Strip */}
+          <div className="mt-8 flex flex-wrap items-center justify-center gap-2 animate-slide-up" style={{ animationDelay: "0.15s" }}>
+            {featureStrip.map((feature, index) => (
+              <span
+                key={feature}
+                className="inline-flex items-center px-3 py-1.5 rounded-full text-xs font-medium bg-primary/10 text-primary border border-primary/20"
+              >
+                {feature}
+              </span>
+            ))}
+          </div>
 
           {/* CTA Buttons */}
           <div className="mt-10 flex flex-col sm:flex-row items-center justify-center gap-4 animate-slide-up" style={{ animationDelay: "0.2s" }}>
@@ -48,37 +73,6 @@ export function Hero() {
             <Button variant="glass" size="xl">
               View Documentation
             </Button>
-          </div>
-
-          {/* Stats */}
-          <div className="mt-16 grid grid-cols-3 gap-8 max-w-2xl mx-auto animate-fade-in" style={{ animationDelay: "0.4s" }}>
-            <div className="text-center">
-              <div className="flex justify-center mb-2">
-                <div className="p-2 rounded-lg bg-primary/10">
-                  <Shield className="h-5 w-5 text-primary" />
-                </div>
-              </div>
-              <div className="text-2xl font-bold font-display">99%</div>
-              <div className="text-sm text-muted-foreground">Bias Detection</div>
-            </div>
-            <div className="text-center">
-              <div className="flex justify-center mb-2">
-                <div className="p-2 rounded-lg bg-fair/10">
-                  <Users className="h-5 w-5 text-fair" />
-                </div>
-              </div>
-              <div className="text-2xl font-bold font-display">50K+</div>
-              <div className="text-sm text-muted-foreground">Candidates Processed</div>
-            </div>
-            <div className="text-center">
-              <div className="flex justify-center mb-2">
-                <div className="p-2 rounded-lg bg-accent/10">
-                  <Sparkles className="h-5 w-5 text-accent" />
-                </div>
-              </div>
-              <div className="text-2xl font-bold font-display">4</div>
-              <div className="text-sm text-muted-foreground">Modalities Analyzed</div>
-            </div>
           </div>
         </div>
       </div>
