@@ -4,7 +4,8 @@
 import type { 
   JobDescription, Candidate, BiasFactor, BiasType, ModalityScore, 
   CandidateExplanation, CounterfactualScenario, InterviewVideo, 
-  CrossModalConsistency, BiasSource, JDParsedFeatures 
+  CrossModalConsistency, BiasSource, JDParsedFeatures,
+  InclusionSignal, InclusionAdjustment
 } from "@/types/fairhire";
 import type { ParsedResume, JDMatchResult } from "./resumeParser";
 
@@ -28,6 +29,19 @@ const NAME_BIAS_PATTERNS = {
 
 // Accent/language patterns
 const LANGUAGE_MISMATCH_INDICATORS = ["Hindi", "Mandarin", "Spanish", "Arabic", "Portuguese", "Russian"];
+
+// Rural education indicators (for inclusion detection)
+const RURAL_EDUCATION_KEYWORDS = [
+  "state university", "govt college", "government college", "rural",
+  "district college", "vernacular", "regional board", "matriculation",
+  "intermediate", "polytechnic", "iti", "industrial training"
+];
+
+// Grammar irregularity patterns (for inclusion detection)
+const GRAMMAR_PATTERNS = [
+  "i am having", "did not came", "more better", "most tallest",
+  "myself is", "are working since", "would have went"
+];
 
 export interface CandidateInput {
   name: string;
@@ -285,6 +299,195 @@ function detectInstitutionBias(name: string, jd: JobDescription, hasResume: bool
     };
   }
   return null;
+}
+
+// ============= INCLUSION-AWARE BIAS DETECTION =============
+
+// Detect inclusion signals from audio modality
+function detectAudioInclusionSignals(
+  candidateName: string,
+  hasAudio: boolean,
+  interviewVideo?: InterviewVideo
+): InclusionSignal[] {
+  if (!hasAudio) return [];
+  
+  const signals: InclusionSignal[] = [];
+  const hash = simpleHash(candidateName + "inclusion_audio");
+  
+  // Speech disfluency (stutter pattern)
+  if (hash % 4 === 0) {
+    signals.push({
+      type: "speech_disfluency",
+      detected: true,
+      confidence: 70 + (hash % 25),
+      adaptation: "Speech fluency penalty removed"
+    });
+  }
+  
+  // Slow speech rate
+  if (interviewVideo?.speakingPace === "slow" || hash % 5 === 1) {
+    signals.push({
+      type: "slow_speech_rate",
+      detected: true,
+      confidence: 65 + (hash % 30),
+      adaptation: "Speaking pace normalized"
+    });
+  }
+  
+  // Accent deviation
+  if (interviewVideo?.accentStrength === "strong" || interviewVideo?.accentStrength === "regional") {
+    signals.push({
+      type: "accent_deviation",
+      detected: true,
+      confidence: 75 + (hash % 20),
+      adaptation: "Accent bias neutralized"
+    });
+  }
+  
+  // Response delay (long gaps)
+  if (hash % 6 === 2) {
+    signals.push({
+      type: "response_delay",
+      detected: true,
+      confidence: 60 + (hash % 30),
+      adaptation: "Response time factor extended"
+    });
+  }
+  
+  return signals;
+}
+
+// Detect inclusion signals from video modality
+function detectVideoInclusionSignals(
+  candidateName: string,
+  hasVideo: boolean,
+  interviewVideo?: InterviewVideo
+): InclusionSignal[] {
+  if (!hasVideo) return [];
+  
+  const signals: InclusionSignal[] = [];
+  const hash = simpleHash(candidateName + "inclusion_video");
+  
+  // Low eye contact frequency
+  if (hash % 4 === 1) {
+    signals.push({
+      type: "low_eye_contact",
+      detected: true,
+      confidence: 70 + (hash % 25),
+      adaptation: "Eye contact weight removed"
+    });
+  }
+  
+  // Flat affect (low facial emotion variance)
+  if (hash % 5 === 0) {
+    signals.push({
+      type: "flat_affect",
+      detected: true,
+      confidence: 65 + (hash % 30),
+      adaptation: "Emotion variance penalty neutralized"
+    });
+  }
+  
+  // Visible nervousness
+  if (interviewVideo?.confidenceEstimation && interviewVideo.confidenceEstimation < 75) {
+    signals.push({
+      type: "nervousness",
+      detected: true,
+      confidence: 80 - (interviewVideo.confidenceEstimation - 50),
+      adaptation: "Confidence penalty corrected"
+    });
+  }
+  
+  return signals;
+}
+
+// Detect inclusion signals from resume
+function detectResumeInclusionSignals(
+  candidateName: string,
+  parsedResume?: ParsedResume
+): InclusionSignal[] {
+  if (!parsedResume) return [];
+  
+  const signals: InclusionSignal[] = [];
+  const hash = simpleHash(candidateName + "inclusion_resume");
+  const textLower = parsedResume.rawText.toLowerCase();
+  
+  // Grammar irregularities
+  const hasGrammarIssues = GRAMMAR_PATTERNS.some(p => textLower.includes(p)) || hash % 5 === 2;
+  if (hasGrammarIssues) {
+    signals.push({
+      type: "grammar_irregularity",
+      detected: true,
+      confidence: 60 + (hash % 30),
+      adaptation: "Resume language bias reduced"
+    });
+  }
+  
+  // Rural education background
+  const hasRuralEducation = RURAL_EDUCATION_KEYWORDS.some(k => textLower.includes(k)) ||
+    parsedResume.education.some(e => 
+      RURAL_EDUCATION_KEYWORDS.some(k => e.institution.toLowerCase().includes(k))
+    ) || hash % 4 === 3;
+  
+  if (hasRuralEducation) {
+    signals.push({
+      type: "rural_background",
+      detected: true,
+      confidence: 75 + (hash % 20),
+      adaptation: "Institution prestige penalty removed"
+    });
+  }
+  
+  return signals;
+}
+
+// Calculate inclusion adjustment (3-12 points, capped at 15 total with bias correction)
+function calculateInclusionAdjustment(
+  candidateName: string,
+  hasAudio: boolean,
+  hasVideo: boolean,
+  parsedResume?: ParsedResume,
+  interviewVideo?: InterviewVideo,
+  existingBiasCorrection: number = 0
+): InclusionAdjustment {
+  const audioSignals = detectAudioInclusionSignals(candidateName, hasAudio, interviewVideo);
+  const videoSignals = detectVideoInclusionSignals(candidateName, hasVideo, interviewVideo);
+  const resumeSignals = detectResumeInclusionSignals(candidateName, parsedResume);
+  
+  const allSignals = [...audioSignals, ...videoSignals, ...resumeSignals];
+  const detectedSignals = allSignals.filter(s => s.detected);
+  
+  // Calculate adjustment: +3 to +12 based on signal count
+  // More signals → higher correction
+  let baseAdjustment = 0;
+  if (detectedSignals.length >= 4) {
+    baseAdjustment = 12;
+  } else if (detectedSignals.length >= 3) {
+    baseAdjustment = 9;
+  } else if (detectedSignals.length >= 2) {
+    baseAdjustment = 6;
+  } else if (detectedSignals.length >= 1) {
+    baseAdjustment = 3;
+  }
+  
+  // Cap total adjustment (bias + inclusion) at 15
+  const maxInclusionAdjustment = Math.max(0, 15 - existingBiasCorrection);
+  const finalAdjustment = Math.min(baseAdjustment, maxInclusionAdjustment);
+  
+  const adjustmentsApplied = detectedSignals.map(s => s.adaptation);
+  
+  // Generate explanation text
+  let explanationText = "";
+  if (detectedSignals.length > 0) {
+    explanationText = `The system detected interview signals commonly associated with speech or communication differences. ${detectedSignals.length} inclusion signal(s) were identified and neutralized to prevent unfair scoring unrelated to technical competence. Adjustments applied: ${adjustmentsApplied.join(', ')}.`;
+  }
+  
+  return {
+    signals: allSignals,
+    totalAdjustment: finalAdjustment,
+    adjustmentsApplied,
+    explanationText
+  };
 }
 
 // Detect resume language structure bias (NEW)
@@ -649,10 +852,24 @@ export function processCandidate(
   // Clamp to valid range
   originalScore = Math.max(55, Math.min(92, originalScore));
   
-  const totalCorrection = biasFactors.reduce((sum, bf) => sum + Math.abs(bf.contribution), 0);
-  const adjustedScore = Math.min(95, originalScore + totalCorrection);
+  // Calculate bias correction (existing logic)
+  const totalBiasCorrection = biasFactors.reduce((sum, bf) => sum + Math.abs(bf.contribution), 0);
+  
+  // Calculate inclusion adjustment (NEW)
+  const inclusionAdjustment = calculateInclusionAdjustment(
+    input.name,
+    hasAudio,
+    hasVideo,
+    parsedResume,
+    input.interviewVideo,
+    totalBiasCorrection
+  );
+  
+  // Final score = original + bias correction + inclusion adjustment
+  const adjustedScore = Math.min(95, originalScore + totalBiasCorrection + inclusionAdjustment.totalAdjustment);
   
   // Determine bias level
+  const totalCorrection = totalBiasCorrection + inclusionAdjustment.totalAdjustment;
   const biasLevel: "low" | "medium" | "high" = 
     totalCorrection >= 15 ? "high" :
     totalCorrection >= 8 ? "medium" : "low";
@@ -726,6 +943,16 @@ export function processCandidate(
     };
   }
   
+  // Add inclusion adjustment explanation if applicable
+  if (inclusionAdjustment.totalAdjustment > 0) {
+    explanations.push({
+      type: "correction",
+      title: "Inclusion Bias Adjustments Applied",
+      description: inclusionAdjustment.explanationText,
+      impact: inclusionAdjustment.totalAdjustment
+    });
+  }
+  
   return {
     id: simpleHash(input.name + jd.id + Date.now().toString()).toString(36),
     name: input.name,
@@ -744,10 +971,11 @@ export function processCandidate(
     processedAt: new Date(),
     parsedResume,
     jdMatchResult,
-    jdDescriptionAlignment, // NEW: Include alignment data
+    jdDescriptionAlignment,
     resumeFileName: input.resumeFileName,
     interviewVideo: enhancedInterviewVideo,
-    crossModalConsistency
+    crossModalConsistency,
+    inclusionAdjustment // NEW: Include inclusion adjustment data
   };
 }
 
@@ -759,18 +987,26 @@ export function calculateStats(candidates: Candidate[]): {
   fairnessScore: number;
   biasCorrections: number;
   avgScoreChange: number;
+  inclusionCorrections: number;
+  avgInclusionBoost: number;
 } {
   if (candidates.length === 0) {
     return {
       candidatesAnalyzed: 0,
       fairnessScore: 0,
       biasCorrections: 0,
-      avgScoreChange: 0
+      avgScoreChange: 0,
+      inclusionCorrections: 0,
+      avgInclusionBoost: 0
     };
   }
   
   const totalBiasFactors = candidates.reduce((sum, c) => sum + c.biasFactors.length, 0);
   const totalScoreChange = candidates.reduce((sum, c) => sum + (c.adjustedScore - c.originalScore), 0);
+  
+  // Calculate inclusion stats
+  const candidatesWithInclusion = candidates.filter(c => c.inclusionAdjustment && c.inclusionAdjustment.totalAdjustment > 0);
+  const totalInclusionBoost = candidates.reduce((sum, c) => sum + (c.inclusionAdjustment?.totalAdjustment || 0), 0);
   
   // Calculate fairness score (higher = better, based on successful corrections)
   const avgCorrection = totalScoreChange / candidates.length;
@@ -780,7 +1016,9 @@ export function calculateStats(candidates: Candidate[]): {
     candidatesAnalyzed: candidates.length,
     fairnessScore: Math.round(fairnessScore * 10) / 10,
     biasCorrections: totalBiasFactors,
-    avgScoreChange: Math.round((totalScoreChange / candidates.length) * 10) / 10
+    avgScoreChange: Math.round((totalScoreChange / candidates.length) * 10) / 10,
+    inclusionCorrections: candidatesWithInclusion.length,
+    avgInclusionBoost: candidates.length > 0 ? Math.round((totalInclusionBoost / candidates.length) * 10) / 10 : 0
   };
 }
 

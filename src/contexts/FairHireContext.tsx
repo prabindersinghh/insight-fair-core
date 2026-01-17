@@ -86,7 +86,9 @@ export function FairHireProvider({ children }: { children: React.ReactNode }) {
     candidatesAnalyzed: 0,
     fairnessScore: 0,
     biasCorrections: 0,
-    avgScoreChange: 0
+    avgScoreChange: 0,
+    inclusionCorrections: 0,
+    avgInclusionBoost: 0
   });
   const [statusFilter, setStatusFilter] = useState<"all" | "processed" | "review" | "pending">("all");
   const [isInitialized, setIsInitialized] = useState(false);

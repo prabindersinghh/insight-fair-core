@@ -67,7 +67,32 @@ export type BiasType =
   | "background_environment"
   | "gender_language"
   | "institution_bias"
-  | "age_proxy";
+  | "age_proxy"
+  // Inclusion-aware bias types
+  | "speech_disfluency"
+  | "slow_speech_rate"
+  | "response_delay"
+  | "low_eye_contact"
+  | "flat_affect"
+  | "grammar_irregularity"
+  | "rural_background";
+
+// Inclusion signal detection result
+export interface InclusionSignal {
+  type: "speech_disfluency" | "slow_speech_rate" | "accent_deviation" | "response_delay" | 
+        "low_eye_contact" | "flat_affect" | "nervousness" | "grammar_irregularity" | "rural_background";
+  detected: boolean;
+  confidence: number; // 0-100
+  adaptation: string; // What correction was applied
+}
+
+// Inclusion adjustment summary
+export interface InclusionAdjustment {
+  signals: InclusionSignal[];
+  totalAdjustment: number;
+  adjustmentsApplied: string[];
+  explanationText: string;
+}
 
 export interface BiasFactor {
   type: BiasType;
@@ -140,7 +165,7 @@ export interface Candidate {
     strengthAreas: string[];
     improvementAreas: string[];
   };
-  // NEW: JD Description alignment analysis
+  // JD Description alignment analysis
   jdDescriptionAlignment?: {
     skillOverlapPercent: number;
     responsibilitiesMatch: "low" | "medium" | "high";
@@ -148,10 +173,12 @@ export interface Candidate {
     alignmentSummary: string;
   };
   resumeFileName?: string;
-  // NEW: Interview video data
+  // Interview video data
   interviewVideo?: InterviewVideo;
-  // NEW: Cross-modal consistency analysis
+  // Cross-modal consistency analysis
   crossModalConsistency?: CrossModalConsistency;
+  // NEW: Inclusion-aware bias adjustments
+  inclusionAdjustment?: InclusionAdjustment;
 }
 
 export interface DashboardStats {
@@ -159,4 +186,7 @@ export interface DashboardStats {
   fairnessScore: number;
   biasCorrections: number;
   avgScoreChange: number;
+  // NEW: Inclusion metrics
+  inclusionCorrections: number;
+  avgInclusionBoost: number;
 }

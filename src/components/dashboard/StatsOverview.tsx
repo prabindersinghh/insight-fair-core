@@ -1,5 +1,5 @@
 import { Card, CardContent } from "@/components/ui/card";
-import { Users, Shield, AlertTriangle, TrendingUp } from "lucide-react";
+import { Users, Shield, AlertTriangle, TrendingUp, Heart, Sparkles } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useFairHire } from "@/contexts/FairHireContext";
 
@@ -66,6 +66,20 @@ export function StatsOverview() {
       bgColor: "bg-caution/10",
     },
     {
+      icon: Heart,
+      label: "Inclusion Corrections",
+      value: stats.inclusionCorrections.toString(),
+      color: "text-fair",
+      bgColor: "bg-fair/10",
+    },
+    {
+      icon: Sparkles,
+      label: "Avg Inclusion Boost",
+      value: stats.avgInclusionBoost > 0 ? `+${stats.avgInclusionBoost.toFixed(1)}` : "—",
+      color: "text-chart-5",
+      bgColor: "bg-chart-5/10",
+    },
+    {
       icon: TrendingUp,
       label: "Avg. Score Change",
       value: stats.avgScoreChange > 0 ? `+${stats.avgScoreChange.toFixed(1)}` : stats.avgScoreChange < 0 ? stats.avgScoreChange.toFixed(1) : "—",
@@ -75,7 +89,7 @@ export function StatsOverview() {
   ];
 
   return (
-    <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+    <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
       {statCards.map((stat, index) => (
         <div key={stat.label} className="animate-slide-up" style={{ animationDelay: `${index * 0.1}s` }}>
           <StatCard {...stat} />
