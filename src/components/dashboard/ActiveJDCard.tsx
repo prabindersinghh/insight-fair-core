@@ -59,6 +59,11 @@ export function ActiveJDCard() {
                 <Badge variant="fair" className="text-xs">Active</Badge>
               </div>
               <div className="flex items-center gap-3 text-xs text-muted-foreground mt-0.5">
+                {activeJD.roleType && (
+                  <Badge variant="outline" className="text-xs font-normal">
+                    {activeJD.roleType}
+                  </Badge>
+                )}
                 <span className="flex items-center gap-1">
                   <Clock className="h-3 w-3" />
                   {activeJD.experienceRange.min}-{activeJD.experienceRange.max} yrs

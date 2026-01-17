@@ -1,8 +1,17 @@
 // Core types for FairHire360
 
+// Target role types for Inclusion MVP Scope
+export type TargetRoleType = 
+  | "Junior Data Analyst"
+  | "Software Developer Intern"
+  | "QA / Test Engineer"
+  | "IT Support Associate"
+  | "Business Analyst (Entry Level)";
+
 export interface JobDescription {
   id: string;
   roleTitle: string;
+  roleType: TargetRoleType; // NEW: Mandatory role selection
   requiredSkills: string[];
   experienceRange: { min: number; max: number };
   languageRequirements: string[];
