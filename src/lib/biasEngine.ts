@@ -4,7 +4,7 @@
 import type { 
   JobDescription, Candidate, BiasFactor, BiasType, ModalityScore, 
   CandidateExplanation, CounterfactualScenario, InterviewVideo, 
-  CrossModalConsistency, BiasSource 
+  CrossModalConsistency, BiasSource, JDParsedFeatures 
 } from "@/types/fairhire";
 import type { ParsedResume, JDMatchResult } from "./resumeParser";
 
@@ -461,6 +461,133 @@ function generateFairnessSummary(
   return correctionTemplates[hash % correctionTemplates.length];
 }
 
+// Calculate JD description text match factor (0.9 - 1.15)
+function calculateJDTextMatchFactor(
+  parsedResume: ParsedResume | undefined,
+  jd: JobDescription
+): number {
+  // If no description or parsed resume, return neutral factor
+  if (!jd.description || !parsedResume) {
+    return 1.0;
+  }
+  
+  const descLower = jd.description.toLowerCase();
+  const resumeSkills = parsedResume.skills.map(s => s.toLowerCase());
+  
+  // Count how many resume skills appear in JD description
+  let matchCount = 0;
+  resumeSkills.forEach(skill => {
+    if (descLower.includes(skill)) {
+      matchCount++;
+    }
+  });
+  
+  // Also check experience titles and descriptions
+  parsedResume.experience.forEach(exp => {
+    const expWords = (exp.title + " " + exp.description).toLowerCase().split(/\s+/);
+    expWords.forEach(word => {
+      if (word.length > 4 && descLower.includes(word)) {
+        matchCount += 0.3;
+      }
+    });
+  });
+  
+  // Calculate factor: 0.9 (weak match) to 1.15 (strong match)
+  const matchRatio = Math.min(1, matchCount / Math.max(1, resumeSkills.length));
+  const factor = 0.9 + (matchRatio * 0.25);
+  
+  return Math.round(factor * 100) / 100;
+}
+
+// Generate JD description alignment analysis
+function generateJDDescriptionAlignment(
+  parsedResume: ParsedResume | undefined,
+  jd: JobDescription
+): { skillOverlapPercent: number; responsibilitiesMatch: "low" | "medium" | "high"; missingAreas: string[]; alignmentSummary: string } | undefined {
+  // If no description, return undefined (backwards compatible)
+  if (!jd.description || jd.description.trim().length === 0) {
+    return undefined;
+  }
+  
+  const descLower = jd.description.toLowerCase();
+  
+  // Default values when no resume
+  if (!parsedResume) {
+    return {
+      skillOverlapPercent: 50,
+      responsibilitiesMatch: "medium",
+      missingAreas: [],
+      alignmentSummary: "Resume parsing required for detailed alignment analysis."
+    };
+  }
+  
+  const resumeSkills = parsedResume.skills.map(s => s.toLowerCase());
+  const jdSkills = jd.requiredSkills.map(s => s.toLowerCase());
+  
+  // Calculate skill overlap with description
+  let descriptionSkillMatches = 0;
+  resumeSkills.forEach(skill => {
+    if (descLower.includes(skill)) {
+      descriptionSkillMatches++;
+    }
+  });
+  
+  // Calculate overlap with required skills
+  let requiredSkillMatches = 0;
+  jdSkills.forEach(skill => {
+    if (resumeSkills.some(rs => rs.includes(skill) || skill.includes(rs))) {
+      requiredSkillMatches++;
+    }
+  });
+  
+  // Combined overlap percentage
+  const totalRelevantSkills = Math.max(1, jdSkills.length);
+  const skillOverlapPercent = Math.round(
+    (requiredSkillMatches / totalRelevantSkills) * 70 + 
+    (descriptionSkillMatches / Math.max(1, resumeSkills.length)) * 30
+  );
+  
+  // Determine responsibilities match
+  let responsibilitiesMatch: "low" | "medium" | "high" = "medium";
+  if (skillOverlapPercent >= 75) {
+    responsibilitiesMatch = "high";
+  } else if (skillOverlapPercent < 45) {
+    responsibilitiesMatch = "low";
+  }
+  
+  // Find missing areas based on parsed features
+  const missingAreas: string[] = [];
+  if (jd.parsedFeatures) {
+    jd.parsedFeatures.detectedSkills.forEach(skill => {
+      const skillLower = skill.toLowerCase();
+      if (!resumeSkills.some(rs => rs.includes(skillLower) || skillLower.includes(rs))) {
+        missingAreas.push(skill);
+      }
+    });
+  }
+  
+  // Generate alignment summary
+  const matchedSkillsList = jd.requiredSkills
+    .filter(s => resumeSkills.some(rs => rs.includes(s.toLowerCase()) || s.toLowerCase().includes(rs)))
+    .slice(0, 3);
+  
+  let alignmentSummary: string;
+  if (skillOverlapPercent >= 75) {
+    alignmentSummary = `The candidate's resume aligns with ${skillOverlapPercent}% of the responsibilities described in the job description, particularly in ${matchedSkillsList.join(', ') || 'core competencies'}.`;
+  } else if (skillOverlapPercent >= 50) {
+    alignmentSummary = `The candidate shows moderate alignment (${skillOverlapPercent}%) with the job description. Strengths in ${matchedSkillsList.join(', ') || 'key areas'}${missingAreas.length > 0 ? `, but gaps in ${missingAreas.slice(0, 2).join(', ')}` : ''}.`;
+  } else {
+    alignmentSummary = `Lower alignment (${skillOverlapPercent}%) with the job description. ${missingAreas.length > 0 ? `Missing experience in: ${missingAreas.slice(0, 3).join(', ')}.` : 'Further review recommended.'}`;
+  }
+  
+  return {
+    skillOverlapPercent,
+    responsibilitiesMatch,
+    missingAreas: missingAreas.slice(0, 5),
+    alignmentSummary
+  };
+}
+
 // Determine if candidate needs review (at least 1 in 5)
 function determineNeedsReview(name: string, index: number): boolean {
   // Ensure at least 1 in 5 candidates needs review
@@ -504,14 +631,23 @@ export function processCandidate(
   const languageBias = detectResumeLanguageBias(parsedResume, jd);
   if (languageBias) biasFactors.push(languageBias);
   
+  // Calculate JD description text match factor (0.9 - 1.15)
+  const jdTextMatchFactor = calculateJDTextMatchFactor(parsedResume, jd);
+  
+  // Calculate JD description alignment
+  const jdDescriptionAlignment = generateJDDescriptionAlignment(parsedResume, jd);
+  
   // Calculate base score using JD match result if available
   let originalScore: number;
   if (jdMatchResult) {
-    // Use JD match as base, with slight variation
-    originalScore = Math.max(60, Math.min(90, jdMatchResult.overallScore - 5 + simpleHash(input.name) % 10));
+    // Use JD match as base, with slight variation, then apply JD text match factor
+    const baseScore = Math.max(60, Math.min(90, jdMatchResult.overallScore - 5 + simpleHash(input.name) % 10));
+    originalScore = Math.round(baseScore * jdTextMatchFactor);
   } else {
-    originalScore = generateBaseATSScore(input.name, jd);
+    originalScore = Math.round(generateBaseATSScore(input.name, jd) * jdTextMatchFactor);
   }
+  // Clamp to valid range
+  originalScore = Math.max(55, Math.min(92, originalScore));
   
   const totalCorrection = biasFactors.reduce((sum, bf) => sum + Math.abs(bf.contribution), 0);
   const adjustedScore = Math.min(95, originalScore + totalCorrection);
@@ -557,6 +693,16 @@ export function processCandidate(
         impact: jdMatchResult.matchedSkills.length * 3
       });
     }
+    
+    // Add JD description alignment explanation
+    if (jdDescriptionAlignment) {
+      explanations.push({
+        type: "info",
+        title: "Job Description Alignment",
+        description: jdDescriptionAlignment.alignmentSummary,
+        impact: Math.round(jdDescriptionAlignment.skillOverlapPercent / 10)
+      });
+    }
   }
   
   // Generate cross-modal consistency analysis
@@ -598,6 +744,7 @@ export function processCandidate(
     processedAt: new Date(),
     parsedResume,
     jdMatchResult,
+    jdDescriptionAlignment, // NEW: Include alignment data
     resumeFileName: input.resumeFileName,
     interviewVideo: enhancedInterviewVideo,
     crossModalConsistency

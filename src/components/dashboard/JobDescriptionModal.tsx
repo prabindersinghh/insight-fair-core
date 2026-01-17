@@ -5,10 +5,11 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Slider } from "@/components/ui/slider";
-import { Briefcase, X, Plus, ChevronRight, Check, ArrowLeft } from "lucide-react";
+import { Textarea } from "@/components/ui/textarea";
+import { Briefcase, X, Plus, ChevronRight, Check, ArrowLeft, FileText } from "lucide-react";
 import { useFairHire } from "@/contexts/FairHireContext";
 import { toast } from "sonner";
-import { TargetRoleType } from "@/types/fairhire";
+import { TargetRoleType, JDParsedFeatures } from "@/types/fairhire";
 
 interface JobDescriptionModalProps {
   trigger?: React.ReactNode;
@@ -17,31 +18,36 @@ interface JobDescriptionModalProps {
 }
 
 // Target roles for Inclusion MVP Scope
-const TARGET_ROLES: { role: TargetRoleType; description: string; suggestedSkills: string[] }[] = [
+const TARGET_ROLES: { role: TargetRoleType; description: string; suggestedSkills: string[]; sampleDescription: string }[] = [
   { 
     role: "Junior Data Analyst", 
     description: "Entry-level data analysis and reporting",
-    suggestedSkills: ["Python", "SQL", "Data Analysis", "Problem Solving"]
+    suggestedSkills: ["Python", "SQL", "Data Analysis", "Problem Solving"],
+    sampleDescription: "The candidate will work on data cleaning, creating reporting dashboards, writing SQL queries, and stakeholder communication. Daily tasks include analyzing datasets, generating insights, and presenting findings to business teams."
   },
   { 
     role: "Software Developer Intern", 
     description: "Software development internship position",
-    suggestedSkills: ["JavaScript", "Python", "React", "Problem Solving"]
+    suggestedSkills: ["JavaScript", "Python", "React", "Problem Solving"],
+    sampleDescription: "The intern will assist with frontend development using React, participate in code reviews, write unit tests, and collaborate with senior developers on feature implementation."
   },
   { 
     role: "QA / Test Engineer", 
     description: "Quality assurance and testing",
-    suggestedSkills: ["Problem Solving", "Communication"]
+    suggestedSkills: ["Problem Solving", "Communication"],
+    sampleDescription: "The candidate will design and execute test cases, perform manual and automated testing, document bugs, and work with developers to ensure software quality across releases."
   },
   { 
     role: "IT Support Associate", 
     description: "Technical support and helpdesk",
-    suggestedSkills: ["Communication", "Problem Solving"]
+    suggestedSkills: ["Communication", "Problem Solving"],
+    sampleDescription: "The role involves providing technical support to internal users, troubleshooting hardware and software issues, managing helpdesk tickets, and documenting solutions for knowledge base."
   },
   { 
     role: "Business Analyst (Entry Level)", 
     description: "Business analysis and requirements gathering",
-    suggestedSkills: ["Data Analysis", "Communication", "Problem Solving", "Project Management"]
+    suggestedSkills: ["Data Analysis", "Communication", "Problem Solving", "Project Management"],
+    sampleDescription: "The candidate will gather business requirements, create process documentation, analyze workflows, and work with stakeholders to translate business needs into technical specifications."
   }
 ];
 
@@ -53,6 +59,71 @@ const COMMON_SKILLS = [
 
 const LANGUAGES = ["English", "Spanish", "Mandarin", "Hindi", "French", "German", "Portuguese", "Arabic"];
 
+// Skill keywords for parsing
+const SKILL_KEYWORDS: Record<string, string[]> = {
+  technical: ["python", "javascript", "sql", "react", "node", "aws", "docker", "kubernetes", "git", "api", "database", "frontend", "backend", "testing", "automation", "excel", "tableau", "power bi", "machine learning", "data"],
+  soft: ["communication", "teamwork", "leadership", "problem solving", "analytical", "presentation", "collaboration", "adaptable", "organized", "detail-oriented"]
+};
+
+// Domain keywords for parsing
+const DOMAIN_KEYWORDS: Record<string, string[]> = {
+  analytics: ["data", "analysis", "reporting", "dashboard", "insight", "metrics", "sql", "visualization", "tableau", "power bi"],
+  development: ["code", "development", "programming", "software", "frontend", "backend", "api", "react", "javascript"],
+  qa: ["test", "testing", "quality", "bug", "automation", "qa", "manual testing", "test case"],
+  it_support: ["support", "helpdesk", "troubleshoot", "hardware", "software", "ticket", "user support"],
+  business: ["requirements", "stakeholder", "process", "workflow", "documentation", "analysis", "business"]
+};
+
+// Parse JD description to extract features
+function parseJDDescription(description: string): JDParsedFeatures {
+  const lowerDesc = description.toLowerCase();
+  
+  // Extract detected skills
+  const detectedSkills: string[] = [];
+  [...SKILL_KEYWORDS.technical, ...SKILL_KEYWORDS.soft].forEach(skill => {
+    if (lowerDesc.includes(skill) && !detectedSkills.includes(skill)) {
+      // Capitalize first letter
+      detectedSkills.push(skill.charAt(0).toUpperCase() + skill.slice(1));
+    }
+  });
+  
+  // Detect domain
+  let maxDomainScore = 0;
+  let detectedDomain: JDParsedFeatures["domain"] = "general";
+  
+  Object.entries(DOMAIN_KEYWORDS).forEach(([domain, keywords]) => {
+    const score = keywords.filter(kw => lowerDesc.includes(kw)).length;
+    if (score > maxDomainScore) {
+      maxDomainScore = score;
+      detectedDomain = domain as JDParsedFeatures["domain"];
+    }
+  });
+  
+  // Determine complexity based on description length and keyword density
+  const wordCount = description.split(/\s+/).length;
+  const keywordDensity = detectedSkills.length / Math.max(1, wordCount / 10);
+  
+  let complexityLevel: JDParsedFeatures["complexityLevel"] = "low";
+  if (wordCount > 100 || detectedSkills.length > 5 || keywordDensity > 0.3) {
+    complexityLevel = "high";
+  } else if (wordCount > 50 || detectedSkills.length > 3) {
+    complexityLevel = "medium";
+  }
+  
+  // Extract important keywords
+  const keywords = description
+    .split(/[\s,;.]+/)
+    .filter(word => word.length > 4)
+    .slice(0, 10);
+  
+  return {
+    detectedSkills,
+    domain: detectedDomain,
+    complexityLevel,
+    keywords
+  };
+}
+
 export function JobDescriptionModal({ trigger, open, onOpenChange }: JobDescriptionModalProps) {
   const { createJobDescription } = useFairHire();
   const [isOpen, setIsOpen] = useState(false);
@@ -63,6 +134,7 @@ export function JobDescriptionModal({ trigger, open, onOpenChange }: JobDescript
   
   // Form state
   const [roleTitle, setRoleTitle] = useState("");
+  const [description, setDescription] = useState("");
   const [requiredSkills, setRequiredSkills] = useState<string[]>([]);
   const [customSkill, setCustomSkill] = useState("");
   const [experienceMin, setExperienceMin] = useState(0);
@@ -85,6 +157,7 @@ export function JobDescriptionModal({ trigger, open, onOpenChange }: JobDescript
 
   const resetForm = () => {
     setRoleTitle("");
+    setDescription("");
     setRequiredSkills([]);
     setCustomSkill("");
     setExperienceMin(0);
@@ -103,10 +176,11 @@ export function JobDescriptionModal({ trigger, open, onOpenChange }: JobDescript
     // Pre-fill role title with selected role
     setRoleTitle(selectedRole);
     
-    // Pre-select suggested skills for the role
+    // Pre-select suggested skills and sample description for the role
     const roleConfig = TARGET_ROLES.find(r => r.role === selectedRole);
     if (roleConfig) {
       setRequiredSkills(roleConfig.suggestedSkills);
+      setDescription(roleConfig.sampleDescription);
     }
     
     setStep(2);
@@ -148,14 +222,23 @@ export function JobDescriptionModal({ trigger, open, onOpenChange }: JobDescript
       toast.error("Please enter a role title");
       return;
     }
+    if (description.trim().length < 50) {
+      toast.error("Job description must be at least 50 characters");
+      return;
+    }
     if (requiredSkills.length === 0) {
       toast.error("Please select at least one required skill");
       return;
     }
 
+    // Parse the description to extract features
+    const parsedFeatures = parseJDDescription(description);
+
     createJobDescription({
       roleTitle: roleTitle.trim(),
       roleType: selectedRole,
+      description: description.trim(),
+      parsedFeatures,
       requiredSkills,
       experienceRange: { min: experienceMin, max: experienceMax },
       languageRequirements,
@@ -163,7 +246,7 @@ export function JobDescriptionModal({ trigger, open, onOpenChange }: JobDescript
     });
 
     toast.success("Job Description Created", {
-      description: `${roleTitle} is now active. You can upload candidates.`
+      description: `${roleTitle} is now active. Detected ${parsedFeatures.detectedSkills.length} skills, ${parsedFeatures.domain} domain.`
     });
 
     // Reset everything
@@ -173,6 +256,9 @@ export function JobDescriptionModal({ trigger, open, onOpenChange }: JobDescript
     
     handleOpenChange(false);
   };
+
+  const descriptionCharCount = description.trim().length;
+  const isDescriptionValid = descriptionCharCount >= 50;
 
   return (
     <Dialog open={controlledOpen} onOpenChange={handleOpenChange}>
@@ -280,6 +366,32 @@ export function JobDescriptionModal({ trigger, open, onOpenChange }: JobDescript
                   value={roleTitle}
                   onChange={(e) => setRoleTitle(e.target.value)}
                 />
+              </div>
+
+              {/* Job Description (NEW) */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <Label htmlFor="description" className="flex items-center gap-2">
+                    <FileText className="h-4 w-4" />
+                    Job Description *
+                  </Label>
+                  <span className={`text-xs ${isDescriptionValid ? "text-muted-foreground" : "text-destructive"}`}>
+                    {descriptionCharCount}/50 min
+                  </span>
+                </div>
+                <Textarea
+                  id="description"
+                  placeholder="Describe the role responsibilities, daily tasks, tools used, team context, and expectations.&#10;&#10;Example: The candidate will work on data cleaning, reporting dashboards, SQL queries, and stakeholder communication…"
+                  value={description}
+                  onChange={(e) => setDescription(e.target.value)}
+                  rows={4}
+                  className="resize-none"
+                />
+                {description.length > 0 && (
+                  <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                    <span>AI will parse this to extract skills, domain, and complexity for fair evaluation.</span>
+                  </div>
+                )}
               </div>
 
               {/* Required Skills */}

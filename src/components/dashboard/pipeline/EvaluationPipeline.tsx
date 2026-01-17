@@ -10,6 +10,7 @@ import { Layer3BiasAnalysis } from "./Layer3BiasAnalysis";
 import { Layer4CausalFairness } from "./Layer4CausalFairness";
 import { Layer5FinalScore } from "./Layer5FinalScore";
 import { InterviewInsightsPanel } from "../InterviewInsightsPanel";
+import { JDDescriptionAlignmentPanel } from "../JDDescriptionAlignmentPanel";
 import { toast } from "sonner";
 import { 
   Database, Brain, ShieldAlert, Scale, Sparkles, 
@@ -222,6 +223,11 @@ export function EvaluationPipeline({ candidate, jobDescription }: EvaluationPipe
           onComplete={() => handleStepComplete(5)}
         />
       </div>
+
+      {/* JD Description Alignment Panel - shown when pipeline complete */}
+      {pipelineComplete && candidate.jdDescriptionAlignment && (
+        <JDDescriptionAlignmentPanel candidate={candidate} />
+      )}
 
       {/* Interview Insights Panel - shown when pipeline complete */}
       {pipelineComplete && (
