@@ -8,10 +8,20 @@ export type TargetRoleType =
   | "IT Support Associate"
   | "Business Analyst (Entry Level)";
 
+// JD Parsed Features from description text
+export interface JDParsedFeatures {
+  detectedSkills: string[];
+  domain: "analytics" | "development" | "qa" | "it_support" | "business" | "general";
+  complexityLevel: "low" | "medium" | "high";
+  keywords: string[];
+}
+
 export interface JobDescription {
   id: string;
   roleTitle: string;
-  roleType: TargetRoleType; // NEW: Mandatory role selection
+  roleType: TargetRoleType; // Mandatory role selection
+  description: string; // NEW: Full job description text
+  parsedFeatures?: JDParsedFeatures; // NEW: Parsed features from description
   requiredSkills: string[];
   experienceRange: { min: number; max: number };
   languageRequirements: string[];
@@ -129,6 +139,13 @@ export interface Candidate {
     experienceYears: number;
     strengthAreas: string[];
     improvementAreas: string[];
+  };
+  // NEW: JD Description alignment analysis
+  jdDescriptionAlignment?: {
+    skillOverlapPercent: number;
+    responsibilitiesMatch: "low" | "medium" | "high";
+    missingAreas: string[];
+    alignmentSummary: string;
   };
   resumeFileName?: string;
   // NEW: Interview video data
