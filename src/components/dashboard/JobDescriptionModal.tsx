@@ -222,8 +222,13 @@ export function JobDescriptionModal({ trigger, open, onOpenChange }: JobDescript
       toast.error("Please enter a role title");
       return;
     }
-    if (description.trim().length < 50) {
-      toast.error("Job description must be at least 50 characters");
+    const wordCount = description.trim().split(/\s+/).filter(w => w.length > 0).length;
+    if (wordCount < 50) {
+      toast.error("Please enter at least 50 words for meaningful job description.");
+      return;
+    }
+    if (wordCount > 300) {
+      toast.error("Job description cannot exceed 300 words.");
       return;
     }
     if (requiredSkills.length === 0) {
@@ -257,8 +262,10 @@ export function JobDescriptionModal({ trigger, open, onOpenChange }: JobDescript
     handleOpenChange(false);
   };
 
-  const descriptionCharCount = description.trim().length;
-  const isDescriptionValid = descriptionCharCount >= 50;
+  const descriptionWordCount = description.trim().split(/\s+/).filter(w => w.length > 0).length;
+  const isDescriptionValid = descriptionWordCount >= 50 && descriptionWordCount <= 300;
+  const isDescriptionTooShort = descriptionWordCount < 50;
+  const isDescriptionTooLong = descriptionWordCount > 300;
 
   return (
     <Dialog open={controlledOpen} onOpenChange={handleOpenChange}>
@@ -375,16 +382,20 @@ export function JobDescriptionModal({ trigger, open, onOpenChange }: JobDescript
                     <FileText className="h-4 w-4" />
                     Job Description *
                   </Label>
-                  <span className={`text-xs ${isDescriptionValid ? "text-muted-foreground" : "text-destructive"}`}>
-                    {descriptionCharCount}/50 min
+                  <span className={`text-xs ${
+                    isDescriptionTooLong ? "text-destructive" : 
+                    isDescriptionTooShort ? "text-caution" : 
+                    "text-muted-foreground"
+                  }`}>
+                    {descriptionWordCount} / 300 words
                   </span>
                 </div>
                 <Textarea
                   id="description"
-                  placeholder="Describe the role responsibilities, daily tasks, tools used, team context, and expectations.&#10;&#10;Example: The candidate will work on data cleaning, reporting dashboards, SQL queries, and stakeholder communication…"
+                  placeholder="Describe the role responsibilities, daily tasks, tools used, team context, and expectations (up to 300 words).&#10;&#10;Example:&#10;The candidate will work on data cleaning, reporting dashboards, SQL queries, stakeholder communication, and supporting senior analysts with business insights..."
                   value={description}
                   onChange={(e) => setDescription(e.target.value)}
-                  rows={4}
+                  rows={5}
                   className="resize-none"
                 />
                 {description.length > 0 && (
